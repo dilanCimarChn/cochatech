@@ -37,40 +37,34 @@ export default function Saldos() {
   return (
     <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-      {/* Header */}
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9' }}>Saldos por cliente</h1>
         <p style={{ color: '#64748b', marginTop: 4, fontSize: 13 }}>
-          Verificación de saldo esperado vs saldo real reportado — {total.toLocaleString()} clientes
+          Saldo USDT calculado vs saldo real reportado — {total.toLocaleString()} clientes
         </p>
       </div>
 
-      {/* Fórmula explicada */}
       <InfoBanner>
-        <strong style={{ color: '#f1f5f9' }}>¿Cómo se calcula el saldo esperado?</strong><br />
-        El sistema suma y resta todas las operaciones del cliente para calcular cuánto debería tener, y lo compara contra el saldo que reporta el Excel:
-        <div style={{ display: 'flex', gap: 24, marginTop: 10, flexWrap: 'wrap' }}>
+        <strong style={{ color: '#f1f5f9' }}>¿Cómo se calcula el saldo USDT?</strong>
+        <div style={{ display: 'flex', gap: 28, marginTop: 10, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ color: '#34d399', marginBottom: 4 }}>Aumenta el saldo</div>
-            <div>+ S-004 Depósitos (USDT)</div>
-            <div>+ S-002 Cobros QR (BOB)</div>
+            <div style={{ color: '#34d399', fontWeight: 600, marginBottom: 4 }}>Suma (entradas USDT)</div>
+            <div>+ S-004 Depósitos (crypto_quantity)</div>
             <div>+ S-005 Banextransfer recibidas</div>
           </div>
           <div>
-            <div style={{ color: '#f87171', marginBottom: 4 }}>Disminuye el saldo</div>
-            <div>− S-003 Retiros (USDT)</div>
-            <div>− S-001 Pagos QR (BOB)</div>
+            <div style={{ color: '#f87171', fontWeight: 600, marginBottom: 4 }}>Resta (salidas USDT)</div>
+            <div>− S-003 Retiros (crypto_quantity + fee)</div>
             <div>− S-005 Banextransfer enviadas</div>
           </div>
-          <div>
-            <div style={{ color: '#f59e0b', marginBottom: 4 }}>Resultado</div>
-            <div>= Saldo esperado</div>
-            <div style={{ color: '#94a3b8', fontSize: 12 }}>Si difiere del saldo real → alerta</div>
+          <div style={{ borderLeft: '1px solid #334155', paddingLeft: 20 }}>
+            <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4 }}>S-001 y S-002 son en BOB</div>
+            <div style={{ color: '#64748b', fontSize: 12 }}>No afectan el saldo USDT</div>
+            <div style={{ color: '#64748b', fontSize: 12 }}>Se concilian en la pestaña anterior</div>
           </div>
         </div>
       </InfoBanner>
 
-      {/* Filtros */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <input
           placeholder="Buscar por nombre o ID de cliente..."
@@ -83,8 +77,8 @@ export default function Saldos() {
         />
         <select value={estado} onChange={(e) => setEstado(e.target.value)} style={selectStyle}>
           <option value="">Todos los clientes</option>
-          <option value="CONCILIADO">Solo los que cuadran</option>
-          <option value="DISCREPANCIA">Solo los que no cuadran (alertas)</option>
+          <option value="CONCILIADO">Solo los que cuadran ✓</option>
+          <option value="DISCREPANCIA">Solo las alertas ⚠</option>
         </select>
       </div>
 
@@ -94,42 +88,36 @@ export default function Saldos() {
       {!loading && (
         <div style={{ background: '#1e293b', borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr>
-                  {[
-                    { label: 'Cuenta ID', tip: null },
-                    { label: 'Nombre del cliente', tip: null },
-                    { label: 'Saldo calculado', tip: 'Lo que el sistema calcula según sus operaciones' },
-                    { label: 'Saldo real', tip: 'Lo que reporta la hoja Saldos del Excel' },
-                    { label: 'Diferencia', tip: 'Calculado − Real. En rojo si no cuadra' },
-                    { label: 'Estado', tip: null },
-                  ].map(({ label, tip }) => (
-                    <th key={label} title={tip || ''} style={{
-                      padding: '10px 14px', textAlign: 'left', background: '#0f172a',
-                      color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155',
-                      whiteSpace: 'nowrap', cursor: tip ? 'help' : 'default',
-                    }}>
-                      {label} {tip && <span style={{ color: '#475569', fontSize: 10 }}>ℹ</span>}
-                    </th>
-                  ))}
+                  <th style={th}>Cuenta ID</th>
+                  <th style={th}>Nombre</th>
+                  <th style={{ ...th, color: '#34d399' }} title="S-004 Depósitos">Depósitos USDT</th>
+                  <th style={{ ...th, color: '#f87171' }} title="S-003 Retiros">Retiros USDT</th>
+                  <th style={{ ...th, color: '#a78bfa' }} title="S-005 Banextransfer neto">Transfers neto</th>
+                  <th style={{ ...th, color: '#f59e0b' }}>Saldo calculado</th>
+                  <th style={th}>Saldo real</th>
+                  <th style={th}>Diferencia</th>
+                  <th style={th}>Estado</th>
                 </tr>
               </thead>
               <tbody>
                 {data.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>Sin resultados</td>
-                  </tr>
+                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>Sin resultados</td></tr>
                 ) : data.map((row, i) => {
-                  const disc = Math.abs(row.diferencia) >= 0.001
+                  const disc = Math.abs(row.diferencia) >= 0.0001
                   return (
                     <tr key={i} style={{ background: disc ? '#7f1d1d15' : 'transparent' }}>
-                      <td style={td}><span style={{ color: '#94a3b8', fontFamily: 'monospace' }}>{row.account_id || '—'}</span></td>
+                      <td style={{ ...td, color: '#94a3b8', fontFamily: 'monospace', fontSize: 11 }}>{row.account_id || '—'}</td>
                       <td style={td}>{row.account_name || '—'}</td>
-                      <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>{fmt(row.saldo_calculado)}</td>
-                      <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>{fmt(row.saldo_real)}</td>
-                      <td style={{ ...td, color: disc ? '#fca5a5' : '#86efac', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                        {disc && '⚠ '}{fmt(row.diferencia)}
+                      <td style={{ ...td, color: '#34d399', textAlign: 'right' }}>{fmt(row.depositos_usdt)}</td>
+                      <td style={{ ...td, color: '#f87171', textAlign: 'right' }}>{fmt(row.retiros_usdt)}</td>
+                      <td style={{ ...td, color: '#a78bfa', textAlign: 'right' }}>{fmt(row.transfers_neto)}</td>
+                      <td style={{ ...td, color: '#f59e0b', fontWeight: 600, textAlign: 'right' }}>{fmt(row.saldo_calculado)}</td>
+                      <td style={{ ...td, textAlign: 'right' }}>{fmt(row.saldo_real)}</td>
+                      <td style={{ ...td, color: disc ? '#fca5a5' : '#86efac', fontWeight: 700, textAlign: 'right' }}>
+                        {disc ? '⚠ ' : '✓ '}{fmt(row.diferencia)}
                       </td>
                       <td style={td}><DiscrepancyBadge estado={row.estado} /></td>
                     </tr>
@@ -152,12 +140,7 @@ export default function Saldos() {
   )
 }
 
-const td = { padding: '9px 14px', borderBottom: '1px solid #0f172a', color: '#e2e8f0' }
-const selectStyle = {
-  background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155',
-  borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer', outline: 'none',
-}
-const paginBtn = (disabled) => ({
-  background: disabled ? '#1e293b' : '#2563eb', color: disabled ? '#64748b' : 'white',
-  border: 'none', borderRadius: 6, padding: '6px 14px', cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 13,
-})
+const th = { padding: '10px 14px', textAlign: 'left', background: '#0f172a', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }
+const td = { padding: '8px 14px', borderBottom: '1px solid #0f172a', color: '#e2e8f0' }
+const selectStyle = { background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer', outline: 'none' }
+const paginBtn = (d) => ({ background: d ? '#1e293b' : '#2563eb', color: d ? '#64748b' : 'white', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: d ? 'not-allowed' : 'pointer', fontSize: 13 })

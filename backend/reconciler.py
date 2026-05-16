@@ -1,294 +1,225 @@
+"""
+Motor de conciliación CryptoOps Engine — Banexcoin Bolivia
+
+Reglas según hoja "Servicios" del Excel:
+  S-001 Pago QR    → CONCILIA contra EXTRACTO DE PAGOS  (por Nro. Transacción)
+  S-002 Cobro QR   → CONCILIA contra EXTRACTO DE COBROS (por Nro. Transacción)
+  S-003 Retiros    → Solo alimenta saldo USDT del cliente (crypto_quantity)
+  S-004 Depósitos  → Solo alimenta saldo USDT del cliente (crypto_quantity)
+  S-005 Transfer   → Solo alimenta saldo USDT del cliente (sender – / receiver +)
+
+Monedas:
+  S-001/S-002 operan en BOB   → conciliación bancaria en BOB
+  S-003/S-004/S-005 en USDT  → saldo cripto del cliente
+"""
+
 import pandas as pd
-import numpy as np
 from typing import Dict, Any
 
-_INVALID_TIDS = {"nan", "none", "null", "", "0", "#n/a", "n/a", "na"}
-
-
-def _to_df(records: list[dict]) -> pd.DataFrame:
-    if not records:
-        return pd.DataFrame()
-    return pd.DataFrame(records)
+_INVALID = {"nan", "none", "null", "", "0", "#n/a", "n/a", "na", "nat"}
 
 
 def _clean_tid(series: pd.Series) -> pd.Series:
-    """Convert to str, strip spaces, mark invalid IDs as empty string."""
     s = series.fillna("").astype(str).str.strip()
-    s = s.where(~s.str.lower().isin(_INVALID_TIDS), "")
-    return s
+    return s.where(~s.str.lower().isin(_INVALID), "")
 
 
-def _valid_rows(df: pd.DataFrame, tid_col: str, amount_col: str) -> pd.DataFrame:
-    """Keep only rows that have a real transaction ID."""
+def _valid(df: pd.DataFrame, tid_col: str) -> pd.DataFrame:
     df = df.copy()
     df["_tid"] = _clean_tid(df[tid_col])
     return df[df["_tid"] != ""].reset_index(drop=True)
 
 
+# ──────────────────────────────────────────────
+# 1. Conciliación S-001 Pago QR vs Extracto Pagos
+# ──────────────────────────────────────────────
 def reconcile_pagos(pago_qr: list[dict], extracto_pagos: list[dict]) -> list[dict]:
-    df_qr_raw = _to_df(pago_qr)
-    df_banco_raw = _to_df(extracto_pagos)
-
-    # Keep only rows with a real transaction ID
-    df_qr = _valid_rows(df_qr_raw, "transaccion_id", "monto_pagado") if not df_qr_raw.empty else pd.DataFrame()
-    df_banco = _valid_rows(df_banco_raw, "codigo_transaccion", "importe_bolivianos") if not df_banco_raw.empty else pd.DataFrame()
-
-    results = []
+    df_qr = pd.DataFrame(pago_qr) if pago_qr else pd.DataFrame()
+    df_banco = pd.DataFrame(extracto_pagos) if extracto_pagos else pd.DataFrame()
 
     if df_qr.empty and df_banco.empty:
         return []
 
-    if df_qr.empty:
-        for _, row in df_banco.iterrows():
-            results.append(_banco_only_row(row, "pago"))
-        return results
+    df_qr = _valid(df_qr, "transaccion_id") if not df_qr.empty else df_qr
+    df_banco = _valid(df_banco, "codigo_transaccion") if not df_banco.empty else df_banco
 
+    # Si solo hay un lado
+    if df_qr.empty:
+        return [_make(row, "pago", "SOLO_EN_BANCO", monto_banco=_f(row, "importe_bolivianos")) for _, row in df_banco.iterrows()]
     if df_banco.empty:
-        for _, row in df_qr.iterrows():
-            results.append(_qr_only_pago_row(row))
-        return results
+        return [_make(row, "pago", "SOLO_EN_QR", monto_qr=_f(row, "monto_pagado"), fecha=_s(row, "fecha_creacion")) for _, row in df_qr.iterrows()]
 
     merged = pd.merge(
-        df_qr[["_tid", "monto_pagado", "fecha_creacion"]].copy(),
-        df_banco[["_tid", "importe_bolivianos", "fecha"]].copy(),
-        on="_tid",
-        how="outer",
-        indicator=True,
+        df_qr[["_tid", "monto_pagado", "fecha_creacion"]],
+        df_banco[["_tid", "importe_bolivianos", "fecha"]],
+        on="_tid", how="outer", indicator=True,
     )
 
+    results = []
     for _, row in merged.iterrows():
-        indicator = str(row["_merge"])
+        ind = str(row["_merge"])
         tid = str(row["_tid"])
-        monto_qr = float(row["monto_pagado"]) if pd.notna(row.get("monto_pagado")) else None
-        monto_banco = float(row["importe_bolivianos"]) if pd.notna(row.get("importe_bolivianos")) else None
-
-        # Skip rows that ended up with an empty tid after merge (shouldn't happen, but safeguard)
-        if tid.lower() in _INVALID_TIDS:
+        if tid.lower() in _INVALID:
             continue
 
-        fecha_val = row.get("fecha_creacion")
-        if pd.isna(fecha_val) or str(fecha_val) in _INVALID_TIDS:
-            fecha_val = row.get("fecha", "")
-        fecha = str(fecha_val) if pd.notna(fecha_val) else ""
+        mq = float(row["monto_pagado"]) if pd.notna(row.get("monto_pagado")) else None
+        mb = float(row["importe_bolivianos"]) if pd.notna(row.get("importe_bolivianos")) else None
+        fecha = _s(row, "fecha_creacion") or _s(row, "fecha")
 
-        if indicator == "both":
-            diferencia = round((monto_qr or 0) - (monto_banco or 0), 4)
-            estado = "CONCILIADO" if abs(diferencia) < 0.01 else "DISCREPANCIA"
-        elif indicator == "left_only":
-            diferencia = None
-            estado = "SOLO_EN_QR"
+        if ind == "both":
+            diff = round((mq or 0) - (mb or 0), 4)
+            estado = "CONCILIADO" if abs(diff) < 0.01 else "DISCREPANCIA"
+        elif ind == "left_only":
+            diff, estado = None, "SOLO_EN_QR"
         else:
-            diferencia = None
-            estado = "SOLO_EN_BANCO"
+            diff, estado = None, "SOLO_EN_BANCO"
 
         results.append({
-            "transaccion_id": tid,
-            "fuente_qr": indicator in ("both", "left_only"),
-            "fuente_banco": indicator in ("both", "right_only"),
-            "monto_qr": monto_qr,
-            "monto_banco": monto_banco,
-            "diferencia": diferencia,
-            "estado": estado,
-            "tipo": "pago",
-            "fecha": fecha,
+            "transaccion_id": tid, "tipo": "pago", "estado": estado,
+            "fuente_qr": ind in ("both", "left_only"),
+            "fuente_banco": ind in ("both", "right_only"),
+            "monto_qr": mq, "monto_banco": mb, "diferencia": diff, "fecha": fecha,
         })
-
     return results
 
 
+# ──────────────────────────────────────────────
+# 2. Conciliación S-002 Cobro QR vs Extracto Cobros
+# ──────────────────────────────────────────────
 def reconcile_cobros(cobro_qr: list[dict], extracto_cobros: list[dict]) -> list[dict]:
-    df_qr_raw = _to_df(cobro_qr)
-    df_banco_raw = _to_df(extracto_cobros)
-
-    df_qr = _valid_rows(df_qr_raw, "transaccion_id", "monto_pagado") if not df_qr_raw.empty else pd.DataFrame()
-    df_banco = _valid_rows(df_banco_raw, "codigo_transaccion", "importe_bolivianos") if not df_banco_raw.empty else pd.DataFrame()
-
-    results = []
+    df_qr = pd.DataFrame(cobro_qr) if cobro_qr else pd.DataFrame()
+    df_banco = pd.DataFrame(extracto_cobros) if extracto_cobros else pd.DataFrame()
 
     if df_qr.empty and df_banco.empty:
         return []
 
+    df_qr = _valid(df_qr, "transaccion_id") if not df_qr.empty else df_qr
+    df_banco = _valid(df_banco, "codigo_transaccion") if not df_banco.empty else df_banco
+
     if df_qr.empty:
-        for _, row in df_banco.iterrows():
-            results.append(_banco_only_row(row, "cobro"))
-        return results
-
+        return [_make(row, "cobro", "SOLO_EN_BANCO", monto_banco=_f(row, "importe_bolivianos")) for _, row in df_banco.iterrows()]
     if df_banco.empty:
-        for _, row in df_qr.iterrows():
-            results.append(_qr_only_cobro_row(row))
-        return results
+        monto_col = "monto_pagado" if "monto_pagado" in df_qr.columns else "importe_neto"
+        return [_make(row, "cobro", "SOLO_EN_QR", monto_qr=_f(row, monto_col), fecha=_s(row, "fecha_creacion")) for _, row in df_qr.iterrows()]
 
-    monto_col_qr = "monto_pagado" if "monto_pagado" in df_qr.columns else "importe_neto"
+    monto_col = "monto_pagado" if "monto_pagado" in df_qr.columns else "importe_neto"
 
     merged = pd.merge(
-        df_qr[["_tid", monto_col_qr, "fecha_creacion"]].copy(),
-        df_banco[["_tid", "importe_bolivianos", "fecha"]].copy(),
-        on="_tid",
-        how="outer",
-        indicator=True,
+        df_qr[["_tid", monto_col, "fecha_creacion"]],
+        df_banco[["_tid", "importe_bolivianos", "fecha"]],
+        on="_tid", how="outer", indicator=True,
     )
 
+    results = []
     for _, row in merged.iterrows():
-        indicator = str(row["_merge"])
+        ind = str(row["_merge"])
         tid = str(row["_tid"])
-        monto_qr = float(row[monto_col_qr]) if pd.notna(row.get(monto_col_qr)) else None
-        monto_banco = float(row["importe_bolivianos"]) if pd.notna(row.get("importe_bolivianos")) else None
-
-        if tid.lower() in _INVALID_TIDS:
+        if tid.lower() in _INVALID:
             continue
 
-        fecha_val = row.get("fecha_creacion")
-        if pd.isna(fecha_val) or str(fecha_val) in _INVALID_TIDS:
-            fecha_val = row.get("fecha", "")
-        fecha = str(fecha_val) if pd.notna(fecha_val) else ""
+        mq = float(row[monto_col]) if pd.notna(row.get(monto_col)) else None
+        mb = float(row["importe_bolivianos"]) if pd.notna(row.get("importe_bolivianos")) else None
+        fecha = _s(row, "fecha_creacion") or _s(row, "fecha")
 
-        if indicator == "both":
-            diferencia = round((monto_qr or 0) - (monto_banco or 0), 4)
-            estado = "CONCILIADO" if abs(diferencia) < 0.01 else "DISCREPANCIA"
-        elif indicator == "left_only":
-            diferencia = None
-            estado = "SOLO_EN_QR"
+        if ind == "both":
+            diff = round((mq or 0) - (mb or 0), 4)
+            estado = "CONCILIADO" if abs(diff) < 0.01 else "DISCREPANCIA"
+        elif ind == "left_only":
+            diff, estado = None, "SOLO_EN_QR"
         else:
-            diferencia = None
-            estado = "SOLO_EN_BANCO"
+            diff, estado = None, "SOLO_EN_BANCO"
 
         results.append({
-            "transaccion_id": tid,
-            "fuente_qr": indicator in ("both", "left_only"),
-            "fuente_banco": indicator in ("both", "right_only"),
-            "monto_qr": monto_qr,
-            "monto_banco": monto_banco,
-            "diferencia": diferencia,
-            "estado": estado,
-            "tipo": "cobro",
-            "fecha": fecha,
+            "transaccion_id": tid, "tipo": "cobro", "estado": estado,
+            "fuente_qr": ind in ("both", "left_only"),
+            "fuente_banco": ind in ("both", "right_only"),
+            "monto_qr": mq, "monto_banco": mb, "diferencia": diff, "fecha": fecha,
         })
-
     return results
 
 
-def _banco_only_row(row, tipo: str) -> dict:
-    return {
-        "transaccion_id": str(row.get("_tid", row.get("codigo_transaccion", ""))),
-        "fuente_qr": False,
-        "fuente_banco": True,
-        "monto_qr": None,
-        "monto_banco": float(row.get("importe_bolivianos", 0) or 0),
-        "diferencia": None,
-        "estado": "SOLO_EN_BANCO",
-        "tipo": tipo,
-        "fecha": str(row.get("fecha", "")) if pd.notna(row.get("fecha", "")) else "",
-    }
-
-
-def _qr_only_pago_row(row) -> dict:
-    return {
-        "transaccion_id": str(row.get("_tid", row.get("transaccion_id", ""))),
-        "fuente_qr": True,
-        "fuente_banco": False,
-        "monto_qr": float(row.get("monto_pagado", 0) or 0),
-        "monto_banco": None,
-        "diferencia": None,
-        "estado": "SOLO_EN_QR",
-        "tipo": "pago",
-        "fecha": str(row.get("fecha_creacion", "")) if pd.notna(row.get("fecha_creacion", "")) else "",
-    }
-
-
-def _qr_only_cobro_row(row) -> dict:
-    monto = row.get("monto_pagado") or row.get("importe_neto") or 0
-    return {
-        "transaccion_id": str(row.get("_tid", row.get("transaccion_id", ""))),
-        "fuente_qr": True,
-        "fuente_banco": False,
-        "monto_qr": float(monto),
-        "monto_banco": None,
-        "diferencia": None,
-        "estado": "SOLO_EN_QR",
-        "tipo": "cobro",
-        "fecha": str(row.get("fecha_creacion", "")) if pd.notna(row.get("fecha_creacion", "")) else "",
-    }
-
-
+# ──────────────────────────────────────────────
+# 3. Saldo USDT por cliente (S-003, S-004, S-005)
+#    BOB no entra aquí — son monedas distintas
+# ──────────────────────────────────────────────
 def reconcile_saldos(
-    depositos: list[dict],
-    retiros: list[dict],
-    pagos_qr: list[dict],
-    cobros_qr: list[dict],
-    transfers: list[dict],
-    saldos: list[dict],
+    depositos: list[dict],    # S-004 — USDT
+    retiros: list[dict],      # S-003 — USDT
+    pagos_qr: list[dict],     # S-001 — BOB (no afecta saldo USDT)
+    cobros_qr: list[dict],    # S-002 — BOB (no afecta saldo USDT)
+    transfers: list[dict],    # S-005 — USDT
+    saldos: list[dict],       # Hoja Saldos — saldo real USDT por cliente
 ) -> list[dict]:
-    totals: Dict[str, Dict[str, float]] = {}
+    totals: Dict[str, float] = {}
     names: Dict[str, str] = {}
 
-    def _add(account_id: str, name: str, field: str, amount: float):
-        if not account_id or account_id.lower() in _INVALID_TIDS:
+    def _add(account_id: str, name: str, amount: float):
+        aid = str(account_id).strip()
+        if not aid or aid.lower() in _INVALID:
             return
-        if account_id not in totals:
-            totals[account_id] = {
-                "depositos": 0.0, "retiros": 0.0, "pagos_qr": 0.0,
-                "cobros_qr": 0.0, "transfers_enviadas": 0.0, "transfers_recibidas": 0.0,
-            }
-        totals[account_id][field] += amount
+        totals[aid] = totals.get(aid, 0.0) + amount
         if name:
-            names[account_id] = name
+            names[aid] = str(name).strip()
 
+    # S-004 Depósitos → suma crypto_quantity al cliente
     for d in depositos:
-        _add(d.get("account_id", ""), d.get("account_name", ""), "depositos", d.get("crypto_quantity", 0) or 0)
+        _add(d.get("account_id", ""), d.get("account_name", ""),
+             +(d.get("crypto_quantity", 0) or 0))
 
+    # S-003 Retiros → resta crypto_quantity + fee al cliente
     for r in retiros:
         qty = (r.get("crypto_quantity", 0) or 0) + (r.get("crypto_fee", 0) or 0)
-        _add(r.get("account_id", ""), r.get("account_name", ""), "retiros", qty)
+        _add(r.get("account_id", ""), r.get("account_name", ""), -qty)
 
-    for p in pagos_qr:
-        _add(p.get("numero_cuenta", ""), "", "pagos_qr", p.get("monto_pagado", 0) or 0)
-
-    for c in cobros_qr:
-        monto = c.get("importe_neto") or c.get("monto_pagado") or 0
-        _add(c.get("numero_cuenta", ""), "", "cobros_qr", monto)
-
+    # S-005 Banextransfer → sender pierde, receiver gana (en USDT)
     for t in transfers:
         amount = t.get("amount", 0) or 0
-        _add(t.get("sender_account", ""), t.get("sender_alias", ""), "transfers_enviadas", amount)
-        _add(t.get("receiver_account", ""), t.get("receiver_alias", ""), "transfers_recibidas", amount)
+        _add(t.get("sender_account", ""),   t.get("sender_alias", ""),   -amount)
+        _add(t.get("receiver_account", ""), t.get("receiver_alias", ""), +amount)
 
-    saldo_real_map: Dict[str, Dict[str, Any]] = {}
+    # Saldo real de la hoja Saldos
+    saldo_real_map: Dict[str, Dict] = {}
     for s in saldos:
-        aid = s.get("account_id", "")
-        if aid and aid.lower() not in _INVALID_TIDS:
+        aid = str(s.get("account_id", "")).strip()
+        if aid and aid.lower() not in _INVALID:
             saldo_real_map[aid] = {
                 "saldo": s.get("saldo", 0) or 0,
-                "name": s.get("account_name", ""),
+                "debe":  s.get("debe", 0) or 0,
+                "haber": s.get("haber", 0) or 0,
+                "name":  s.get("account_name", ""),
             }
             if s.get("account_name"):
-                names[aid] = s["account_name"]
+                names[aid] = str(s["account_name"]).strip()
 
     all_accounts = set(totals.keys()) | set(saldo_real_map.keys())
     results = []
 
     for aid in all_accounts:
-        t = totals.get(aid, {})
-        saldo_calc = (
-            t.get("depositos", 0) + t.get("cobros_qr", 0) + t.get("transfers_recibidas", 0)
-            - t.get("retiros", 0) - t.get("pagos_qr", 0) - t.get("transfers_enviadas", 0)
-        )
-        saldo_real = saldo_real_map.get(aid, {}).get("saldo", 0)
+        saldo_calc = round(totals.get(aid, 0.0), 6)
+        real = saldo_real_map.get(aid, {})
+        saldo_real = real.get("saldo", 0)
         diferencia = round(saldo_calc - saldo_real, 6)
-        estado = "CONCILIADO" if abs(diferencia) < 0.001 else "DISCREPANCIA"
+        estado = "CONCILIADO" if abs(diferencia) < 0.0001 else "DISCREPANCIA"
 
         results.append({
             "account_id": aid,
             "account_name": names.get(aid, ""),
-            "saldo_calculado": round(saldo_calc, 6),
-            "saldo_real": round(saldo_real, 6),
-            "diferencia": diferencia,
-            "estado": estado,
+            "depositos_usdt":   round(sum((d.get("crypto_quantity", 0) or 0) for d in depositos if str(d.get("account_id", "")).strip() == aid), 4),
+            "retiros_usdt":     round(sum((r.get("crypto_quantity", 0) or 0) + (r.get("crypto_fee", 0) or 0) for r in retiros if str(r.get("account_id", "")).strip() == aid), 4),
+            "transfers_neto":   round(totals.get(aid, 0) - sum((d.get("crypto_quantity", 0) or 0) for d in depositos if str(d.get("account_id", "")).strip() == aid) + sum((r.get("crypto_quantity", 0) or 0) + (r.get("crypto_fee", 0) or 0) for r in retiros if str(r.get("account_id", "")).strip() == aid), 4),
+            "saldo_calculado":  saldo_calc,
+            "saldo_real":       round(saldo_real, 6),
+            "diferencia":       diferencia,
+            "estado":           estado,
         })
 
     results.sort(key=lambda x: abs(x["diferencia"]), reverse=True)
     return results
 
 
+# ──────────────────────────────────────────────
+# 4. Métricas generales
+# ──────────────────────────────────────────────
 def compute_metricas(
     conciliacion_pagos: list[dict],
     conciliacion_cobros: list[dict],
@@ -297,29 +228,45 @@ def compute_metricas(
     pagos_qr: list[dict],
     cobros_qr: list[dict],
 ) -> dict:
-    all_results = conciliacion_pagos + conciliacion_cobros
-    total = len(all_results)
-    conciliadas = sum(1 for r in all_results if r["estado"] == "CONCILIADO")
-    discrepancias = sum(1 for r in all_results if r["estado"] == "DISCREPANCIA")
-    solo_qr = sum(1 for r in all_results if r["estado"] == "SOLO_EN_QR")
-    solo_banco = sum(1 for r in all_results if r["estado"] == "SOLO_EN_BANCO")
-
-    usdt_dep = sum(d.get("crypto_quantity", 0) or 0 for d in depositos)
-    usdt_ret = sum(r.get("crypto_quantity", 0) or 0 for r in retiros)
-    bob_pagos = sum(p.get("monto_pagado", 0) or 0 for p in pagos_qr)
-    bob_cobros = sum((c.get("monto_pagado") or c.get("importe_neto") or 0) for c in cobros_qr)
-
-    tasa = round((conciliadas / total) * 100, 2) if total > 0 else 0.0
+    all_r = conciliacion_pagos + conciliacion_cobros
+    total = len(all_r)
+    conciliadas  = sum(1 for r in all_r if r["estado"] == "CONCILIADO")
+    discrepancias = sum(1 for r in all_r if r["estado"] == "DISCREPANCIA")
+    solo_qr      = sum(1 for r in all_r if r["estado"] == "SOLO_EN_QR")
+    solo_banco   = sum(1 for r in all_r if r["estado"] == "SOLO_EN_BANCO")
 
     return {
-        "total_transacciones": total,
-        "conciliadas": conciliadas,
-        "discrepancias": discrepancias,
-        "solo_en_qr": solo_qr,
-        "solo_en_banco": solo_banco,
-        "total_usdt_depositado": round(usdt_dep, 4),
-        "total_usdt_retirado": round(usdt_ret, 4),
-        "total_bob_pagos": round(bob_pagos, 2),
-        "total_bob_cobros": round(bob_cobros, 2),
-        "tasa_conciliacion": tasa,
+        "total_transacciones":    total,
+        "conciliadas":            conciliadas,
+        "discrepancias":          discrepancias,
+        "solo_en_qr":             solo_qr,
+        "solo_en_banco":          solo_banco,
+        "total_usdt_depositado":  round(sum(d.get("crypto_quantity", 0) or 0 for d in depositos), 4),
+        "total_usdt_retirado":    round(sum(r.get("crypto_quantity", 0) or 0 for r in retiros), 4),
+        "total_bob_pagos":        round(sum(p.get("monto_pagado", 0) or 0 for p in pagos_qr), 2),
+        "total_bob_cobros":       round(sum((c.get("monto_pagado") or c.get("importe_neto") or 0) for c in cobros_qr), 2),
+        "tasa_conciliacion":      round((conciliadas / total) * 100, 2) if total > 0 else 0.0,
+    }
+
+
+# ── Helpers ──
+def _f(row, col: str) -> float:
+    v = row.get(col)
+    return float(v) if pd.notna(v) and v is not None else 0.0
+
+def _s(row, col: str) -> str:
+    v = row.get(col)
+    s = str(v) if pd.notna(v) and v is not None else ""
+    return "" if s.lower() in _INVALID else s
+
+def _make(row, tipo: str, estado: str, monto_qr=None, monto_banco=None, fecha="") -> dict:
+    tid = str(row.get("_tid", ""))
+    return {
+        "transaccion_id": tid, "tipo": tipo, "estado": estado,
+        "fuente_qr":    estado in ("SOLO_EN_QR",),
+        "fuente_banco": estado in ("SOLO_EN_BANCO",),
+        "monto_qr":    monto_qr,
+        "monto_banco": monto_banco,
+        "diferencia":  None,
+        "fecha":       fecha or _s(row, "fecha"),
     }
