@@ -165,46 +165,24 @@ Si Saldo esperado ≠ Saldo real → ALERTA ⚠
 
 ## Cómo correrlo después de clonar el repositorio
 
-### Requisitos previos
-- [Python 3.10+](https://www.python.org/downloads/)
-- [Node.js 18+](https://nodejs.org/)
+Hay dos formas. **Docker es la recomendada** porque funciona igual en cualquier computadora sin importar qué versión de Python o Node tenga instalada.
 
-### Pasos (una sola vez)
+---
 
-```powershell
+### Opción A — Docker (recomendado)
+
+**Requisito:** tener [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado y corriendo.
+
+```bash
 # 1. Clonar el repositorio
 git clone https://github.com/dilanCimarChn/cochatech.git
 cd cochatech
 
-# 2. Instalar dependencias del backend
-cd backend
-pip install -r requirements.txt
-
-# 3. Instalar dependencias del frontend
-cd ../frontend
-npm install
+# 2. Construir y arrancar todo con un solo comando
+docker compose up --build
 ```
 
-### Arrancar el proyecto
-
-Abre **dos terminales** y ejecuta una cosa en cada una:
-
-**Terminal 1 — Backend:**
-```powershell
-cd backend
-uvicorn main:app --reload --port 8000
-```
-
-**Terminal 2 — Frontend:**
-```powershell
-cd frontend
-npm run dev
-```
-
-O usa el script que abre las dos terminales automáticamente (Windows):
-```powershell
-.\start.ps1
-```
+La primera vez descarga las imágenes base y construye los contenedores (~3 min). Las siguientes veces solo tarda unos segundos.
 
 | Servicio | URL |
 |----------|-----|
@@ -212,9 +190,39 @@ O usa el script que abre las dos terminales automáticamente (Windows):
 | Backend (API) | http://localhost:8000 |
 | Documentación API | http://localhost:8000/docs |
 
+Para detener: `Ctrl+C` y luego `docker compose down`
+
+---
+
+### Opción B — Sin Docker (requiere Python 3.10–3.13 y Node 18+)
+
+> ⚠ Si tienes Python 3.14 usa la Opción A — pydantic aún no es compatible con 3.14.
+
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/dilanCimarChn/cochatech.git
+cd cochatech
+```
+
+**Terminal 1 — Backend:**
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+**Terminal 2 — Frontend:**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+---
+
 ### Cargar los datos
 
-Una vez que el sistema esté corriendo, abre http://localhost:5173, ve al **Dashboard** y usa el botón **"Cargar Excel"** para subir el archivo de Banexcoin. El sistema procesa las 9 hojas automáticamente y recuerda el archivo aunque reinicies el servidor.
+Una vez corriendo, abre http://localhost:5173 → **Dashboard** → botón **"Cargar Excel"** → sube el archivo de Banexcoin. El sistema lo recuerda aunque reinicies el servidor.
 
 ---
 
