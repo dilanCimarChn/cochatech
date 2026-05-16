@@ -94,14 +94,22 @@ def _process_excel(file_path: str):
         database.upsert_batch(table, _store[key])
 
 
-# Try to load the bundled Excel at startup if present
-_DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "Reportes_Banexcoin_Bolivia_Hackaton_2026.xlsx")
-if os.path.exists(_DATA_PATH):
-    try:
-        _process_excel(_DATA_PATH)
-        print(f"Auto-loaded data from {_DATA_PATH}")
-    except Exception as e:
-        print(f"Could not auto-load data: {e}")
+_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+_LAST_UPLOAD = os.path.join(_DATA_DIR, "last_upload.xlsx")
+_BANEXCOIN   = os.path.join(_DATA_DIR, "Reportes_Banexcoin_Bolivia_Hackaton_2026.xlsx")
+
+def _autoload():
+    """On startup, reload the last uploaded file so data survives server restarts."""
+    for path in [_LAST_UPLOAD, _BANEXCOIN]:
+        if os.path.exists(path):
+            try:
+                _process_excel(path)
+                print(f"[CryptoOps] Auto-cargado: {os.path.basename(path)}")
+                return
+            except Exception as e:
+                print(f"[CryptoOps] No se pudo cargar {os.path.basename(path)}: {e}")
+
+_autoload()
 
 
 @app.get("/")
@@ -134,12 +142,15 @@ async def upload(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Solo se aceptan archivos Excel (.xlsx, .xls) o CSV")
 
     content = await file.read()
-    # Use mkstemp so we can close the fd before pandas opens the file (Windows file locking)
     tmp_fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
     try:
         with os.fdopen(tmp_fd, "wb") as tmp:
             tmp.write(content)
         _process_excel(tmp_path)
+        # Persist so the server can reload after restart without re-uploading
+        os.makedirs(_DATA_DIR, exist_ok=True)
+        with open(_LAST_UPLOAD, "wb") as f:
+            f.write(content)
     except HTTPException:
         raise
     except Exception as e:
@@ -148,7 +159,7 @@ async def upload(file: UploadFile = File(...)):
         try:
             os.unlink(tmp_path)
         except OSError:
-            pass  # Windows may still hold the handle; temp dir will clean it up
+            pass
 
     metricas = _store["metricas"]
     return {
