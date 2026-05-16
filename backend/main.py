@@ -46,14 +46,6 @@ _store: dict = {
 }
 
 
-def _print_normalized(key: str, rows: list, n: int = 3):
-    print(f"\n--- {key} ({len(rows)} registros) ---")
-    if not rows:
-        print("  (vacío)")
-        return
-    for i, row in enumerate(rows[:n]):
-        print(f"  [{i}] {row}")
-
 
 def _process_excel(file_path: str):
     sheets = loader.load_excel(file_path)
@@ -67,10 +59,13 @@ def _process_excel(file_path: str):
     _store["extracto_pagos"] = loader.normalize_extracto_pagos(sheets.get("extracto_pagos", pd.DataFrame()))
     _store["extracto_cobros"] = loader.normalize_extracto_cobros(sheets.get("extracto_cobros", pd.DataFrame()))
 
-    print("\n========== DATOS NORMALIZADOS ==========")
-    for key in ["depositos", "retiros", "pago_qr", "cobro_qr", "transfers", "saldos", "extracto_pagos", "extracto_cobros"]:
-        _print_normalized(key, _store[key])
-    print("========================================\n")
+    # Diagnóstico directo: primeros 3 registros de cada lado del cruce
+    print("\n===== DIAGNÓSTICO CRUCE PAGOS =====")
+    for r in _store["pago_qr"][:3]:
+        print(f"  QR   tid={r.get('transaccion_id')}  monto={r.get('monto_pagado')}")
+    for r in _store["extracto_pagos"][:3]:
+        print(f"  EXT  tid={r.get('codigo_transaccion')}  importe={r.get('importe_bolivianos')}")
+    print("===================================\n")
 
     _store["saldos_bob"] = reconciler.reconcile_saldos_bob(
         _store["pago_qr"], _store["cobro_qr"]

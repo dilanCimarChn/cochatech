@@ -84,7 +84,7 @@ def reconcile_pagos(pago_qr: list[dict], extracto_pagos: list[dict]) -> list[dic
         fecha = _s(row, "fecha_creacion") or _s(row, "fecha")
 
         if ind == "both":
-            diff = round((mq or 0) - (mb or 0), 4)
+            diff = round(abs(mq or 0) - abs(mb or 0), 4)
             estado = "CONCILIADO" if abs(diff) < 0.01 else "DISCREPANCIA"
         elif ind == "left_only":
             diff, estado = None, "SOLO_EN_QR"
@@ -95,13 +95,12 @@ def reconcile_pagos(pago_qr: list[dict], extracto_pagos: list[dict]) -> list[dic
             "transaccion_id": tid, "tipo": "pago", "estado": estado,
             "fuente_qr": ind in ("both", "left_only"),
             "fuente_banco": ind in ("both", "right_only"),
-            "monto_qr": mq, "monto_banco": mb, "diferencia": diff, "fecha": fecha,
+            "monto_qr": mq, "monto_banco": abs(mb) if mb is not None else None,
+            "diferencia": diff, "fecha": fecha,
         })
 
     conciliados = [r for r in results if r["estado"] == "CONCILIADO"]
     print(f"[reconcile_pagos] CONCILIADOS: {len(conciliados)}")
-    for r in conciliados[:5]:
-        print(f"  {r}")
     return results
 
 
@@ -155,7 +154,7 @@ def reconcile_cobros(cobro_qr: list[dict], extracto_cobros: list[dict]) -> list[
         fecha = _s(row, "fecha_creacion") or _s(row, "fecha")
 
         if ind == "both":
-            diff = round((mq or 0) - (mb or 0), 4)
+            diff = round(abs(mq or 0) - abs(mb or 0), 4)
             estado = "CONCILIADO" if abs(diff) < 0.01 else "DISCREPANCIA"
         elif ind == "left_only":
             diff, estado = None, "SOLO_EN_QR"
@@ -166,13 +165,12 @@ def reconcile_cobros(cobro_qr: list[dict], extracto_cobros: list[dict]) -> list[
             "transaccion_id": tid, "tipo": "cobro", "estado": estado,
             "fuente_qr": ind in ("both", "left_only"),
             "fuente_banco": ind in ("both", "right_only"),
-            "monto_qr": mq, "monto_banco": mb, "diferencia": diff, "fecha": fecha,
+            "monto_qr": mq, "monto_banco": abs(mb) if mb is not None else None,
+            "diferencia": diff, "fecha": fecha,
         })
 
     conciliados = [r for r in results if r["estado"] == "CONCILIADO"]
     print(f"[reconcile_cobros] CONCILIADOS: {len(conciliados)}")
-    for r in conciliados[:5]:
-        print(f"  {r}")
     return results
 
 

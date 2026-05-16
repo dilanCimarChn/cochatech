@@ -81,11 +81,11 @@ export default function ConciliacionPagos() {
       {resumen && (
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {[
-            { label: 'Conciliados',        valor: resumen.conciliados,   color: '#22c55e', sub: `BOB ${Number(resumen.monto_conciliado_bob).toLocaleString('es-BO')}` },
-            { label: 'Solo en Sistema',    valor: resumen.solo_en_qr,    color: '#f59e0b', sub: 'No están en banco' },
-            { label: 'Solo en Banco',      valor: resumen.solo_en_banco, color: '#3b82f6', sub: 'No están en sistema' },
-            { label: 'Discrepancias',      valor: resumen.discrepancias, color: '#ef4444', sub: 'Montos distintos' },
-            { label: 'Tasa conciliación',  valor: `${resumen.tasa_conciliacion}%`, color: '#a78bfa', sub: `${resumen.total} registros totales` },
+            { label: 'Conciliados',       valor: resumen.conciliados,   color: '#22c55e', sub: `de ${resumen.total} registros` },
+            { label: 'Discrepancias',     valor: resumen.discrepancias, color: '#ef4444', sub: 'Montos distintos' },
+            { label: 'Solo en Sistema',   valor: resumen.solo_en_qr,    color: '#f59e0b', sub: 'No están en banco' },
+            { label: 'Solo en Banco',     valor: resumen.solo_en_banco, color: '#3b82f6', sub: 'No están en sistema' },
+            { label: 'Tasa conciliación', valor: `${resumen.tasa_conciliacion}%`, color: '#a78bfa', sub: `BOB ${Number(resumen.monto_conciliado_bob).toLocaleString('es-BO')}` },
           ].map(({ label, valor, color, sub }) => (
             <div key={label} style={{ background: '#1e293b', borderRadius: 10, padding: '14px 20px', borderLeft: `3px solid ${color}`, minWidth: 160 }}>
               <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{label}</div>
