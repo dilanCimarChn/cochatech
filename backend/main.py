@@ -285,6 +285,30 @@ def get_metricas():
     return _store["metricas"]
 
 
+def _resumen(registros: list) -> dict:
+    total    = len(registros)
+    conc     = sum(1 for r in registros if r["estado"] == "CONCILIADO")
+    disc     = sum(1 for r in registros if r["estado"] == "DISCREPANCIA")
+    solo_qr  = sum(1 for r in registros if r["estado"] == "SOLO_EN_QR")
+    solo_ban = sum(1 for r in registros if r["estado"] == "SOLO_EN_BANCO")
+    monto_conc = round(sum(r["monto_qr"] or 0 for r in registros if r["estado"] == "CONCILIADO"), 2)
+    monto_riesgo = round(
+        sum(abs(r["monto_qr"] or 0)    for r in registros if r["estado"] == "SOLO_EN_QR") +
+        sum(abs(r["monto_banco"] or 0)  for r in registros if r["estado"] == "SOLO_EN_BANCO") +
+        sum(abs(r["diferencia"] or 0)   for r in registros if r["estado"] == "DISCREPANCIA"), 2
+    )
+    return {
+        "total":        total,
+        "conciliados":  conc,
+        "discrepancias": disc,
+        "solo_en_qr":   solo_qr,
+        "solo_en_banco": solo_ban,
+        "monto_conciliado_bob": monto_conc,
+        "monto_en_riesgo_bob":  monto_riesgo,
+        "tasa_conciliacion": round((conc / total) * 100, 1) if total else 0.0,
+    }
+
+
 def _paginar(data: list, page: int, page_size: int) -> dict:
     total = len(data)
     start = (page - 1) * page_size
@@ -309,11 +333,11 @@ def get_conciliacion_pagos(
     if not _store["loaded"]:
         raise HTTPException(status_code=404, detail="No hay datos cargados.")
 
-    data = _store["conciliacion_pagos"]
-    if estado:
-        data = [r for r in data if r["estado"] == estado.upper()]
-
-    return _paginar(data, page, page_size)
+    todos = _store["conciliacion_pagos"]
+    data  = [r for r in todos if r["estado"] == estado.upper()] if estado else todos
+    result = _paginar(data, page, page_size)
+    result["resumen"] = _resumen(todos)
+    return result
 
 
 @app.get("/conciliacion/cobros")
@@ -325,11 +349,11 @@ def get_conciliacion_cobros(
     if not _store["loaded"]:
         raise HTTPException(status_code=404, detail="No hay datos cargados.")
 
-    data = _store["conciliacion_cobros"]
-    if estado:
-        data = [r for r in data if r["estado"] == estado.upper()]
-
-    return _paginar(data, page, page_size)
+    todos = _store["conciliacion_cobros"]
+    data  = [r for r in todos if r["estado"] == estado.upper()] if estado else todos
+    result = _paginar(data, page, page_size)
+    result["resumen"] = _resumen(todos)
+    return result
 
 
 @app.get("/conciliacion")

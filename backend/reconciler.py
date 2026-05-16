@@ -66,6 +66,12 @@ def reconcile_pagos(pago_qr: list[dict], extracto_pagos: list[dict]) -> list[dic
     counts = merged["_merge"].value_counts().to_dict()
     print(f"[reconcile_pagos] merge → {counts}")
 
+    ambos = merged[merged["_merge"] == "both"].head(5)
+    if not ambos.empty:
+        print("[reconcile_pagos] Muestra de registros en AMBOS lados:")
+        for _, r in ambos.iterrows():
+            print(f"  TID={r['_tid']}  monto_qr={r.get('monto_pagado')}  monto_banco={r.get('importe_bolivianos')}")
+
     results = []
     for _, row in merged.iterrows():
         ind = str(row["_merge"])

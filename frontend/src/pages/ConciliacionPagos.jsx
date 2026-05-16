@@ -39,20 +39,28 @@ const COLS = [
 ]
 
 export default function ConciliacionPagos() {
-  const [data, setData]   = useState([])
-  const [total, setTotal] = useState(0)
-  const [pages, setPages] = useState(1)
-  const [page, setPage]   = useState(1)
+  const [data, setData]       = useState([])
+  const [total, setTotal]     = useState(0)
+  const [pages, setPages]     = useState(1)
+  const [page, setPage]       = useState(1)
+  const [resumen, setResumen] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [estado, setEstado] = useState('')
+  const [error, setError]     = useState(null)
+  const [estado, setEstado]   = useState('')
 
   const load = (pg = 1) => {
     setLoading(true)
     const params = { page: pg, page_size: 20 }
     if (estado) params.estado = estado
     getConciliacionPagos(params)
-      .then((r) => { setData(r.data.data); setTotal(r.data.total); setPages(r.data.pages); setPage(pg); setError(null) })
+      .then((r) => {
+        setData(r.data.data)
+        setTotal(r.data.total)
+        setPages(r.data.pages)
+        setPage(pg)
+        setResumen(r.data.resumen)
+        setError(null)
+      })
       .catch((e) => setError(e.response?.data?.detail || 'Error cargando datos'))
       .finally(() => setLoading(false))
   }
@@ -68,6 +76,25 @@ export default function ConciliacionPagos() {
           Pagos QR del sistema Banexcoin vs extracto bancario — {total.toLocaleString()} registros
         </p>
       </div>
+
+      {/* Tarjetas resumen */}
+      {resumen && (
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {[
+            { label: 'Conciliados',        valor: resumen.conciliados,   color: '#22c55e', sub: `BOB ${Number(resumen.monto_conciliado_bob).toLocaleString('es-BO')}` },
+            { label: 'Solo en Sistema',    valor: resumen.solo_en_qr,    color: '#f59e0b', sub: 'No están en banco' },
+            { label: 'Solo en Banco',      valor: resumen.solo_en_banco, color: '#3b82f6', sub: 'No están en sistema' },
+            { label: 'Discrepancias',      valor: resumen.discrepancias, color: '#ef4444', sub: 'Montos distintos' },
+            { label: 'Tasa conciliación',  valor: `${resumen.tasa_conciliacion}%`, color: '#a78bfa', sub: `${resumen.total} registros totales` },
+          ].map(({ label, valor, color, sub }) => (
+            <div key={label} style={{ background: '#1e293b', borderRadius: 10, padding: '14px 20px', borderLeft: `3px solid ${color}`, minWidth: 160 }}>
+              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{label}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color }}>{valor}</div>
+              <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{sub}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {Object.entries(ESTADO_INFO).map(([key, info]) => (
