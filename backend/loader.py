@@ -75,26 +75,14 @@ def _read_sheet(xl: pd.ExcelFile, sheet_name: str) -> pd.DataFrame:
 
 
 def load_excel(file_path: str) -> Dict[str, pd.DataFrame]:
-    xl = pd.ExcelFile(file_path)
-    print(f"\n{'='*60}")
-    print(f"EXCEL: {file_path}")
-    print(f"Hojas disponibles: {xl.sheet_names}")
-    print(f"{'='*60}")
+    xl     = pd.ExcelFile(file_path)
     result = {}
-
     for key, candidates in SHEET_MAP.items():
         sheet_name = _find_sheet(xl, candidates)
         if sheet_name:
-            df = _read_sheet(xl, sheet_name)
-            result[key] = df
-            print(f"\n[{key}] <- hoja '{sheet_name}' ({len(df)} filas)")
-            print(f"  Cabeceras originales : {list(xl.parse(sheet_name, nrows=0).columns)}")
-            print(f"  Cabeceras normalizadas: {list(df.columns)}")
+            result[key] = _read_sheet(xl, sheet_name)
         else:
             result[key] = pd.DataFrame()
-            print(f"\n[{key}] <- NO ENCONTRADA (buscando: {candidates})")
-
-    print(f"\n{'='*60}\n")
     return result
 
 

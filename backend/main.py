@@ -59,14 +59,6 @@ def _process_excel(file_path: str):
     _store["extracto_pagos"] = loader.normalize_extracto_pagos(sheets.get("extracto_pagos", pd.DataFrame()))
     _store["extracto_cobros"] = loader.normalize_extracto_cobros(sheets.get("extracto_cobros", pd.DataFrame()))
 
-    # Diagnóstico directo: primeros 3 registros de cada lado del cruce
-    print("\n===== DIAGNÓSTICO CRUCE PAGOS =====")
-    for r in _store["pago_qr"][:3]:
-        print(f"  QR   tid={r.get('transaccion_id')}  monto={r.get('monto_pagado')}")
-    for r in _store["extracto_pagos"][:3]:
-        print(f"  EXT  tid={r.get('codigo_transaccion')}  importe={r.get('importe_bolivianos')}")
-    print("===================================\n")
-
     _store["saldos_bob"] = reconciler.reconcile_saldos_bob(
         _store["pago_qr"], _store["cobro_qr"]
     )
@@ -93,89 +85,6 @@ def _process_excel(file_path: str):
         _store["cobro_qr"],
     )
     _store["loaded"] = True
-
-    def _print_conciliacion(nombre, registros):
-        solo_qr  = [r for r in registros if r["estado"] == "SOLO_EN_QR"]
-        solo_ban = [r for r in registros if r["estado"] == "SOLO_EN_BANCO"]
-        disc     = [r for r in registros if r["estado"] == "DISCREPANCIA"]
-        conc     = [r for r in registros if r["estado"] == "CONCILIADO"]
-        print(f"\n{'='*50}")
-        print(f"  CONCILIACION: {nombre}")
-        print(f"{'='*50}")
-        print(f"  Conciliados              : {len(conc)}")
-        print(f"  Alertas en Sistema NO Banco : {len(solo_qr)}")
-        print(f"  Alertas en Banco NO Sistema : {len(solo_ban)}")
-        print(f"  Discrepancias de monto   : {len(disc)}")
-
-        errores = solo_qr + solo_ban + disc
-        if not errores:
-            print("  Conciliacion perfecta. No hay discrepancias.")
-        else:
-            print(f"\n  {'Transaccion Id':<20} {'Monto Sistema':>14} {'Monto Banco':>12} {'Estado'}")
-            print(f"  {'-'*20} {'-'*14} {'-'*12} {'-'*14}")
-            for r in errores[:10]:
-                mq = f"{r['monto_qr']:,.2f}"  if r["monto_qr"]  is not None else "—"
-                mb = f"{r['monto_banco']:,.2f}" if r["monto_banco"] is not None else "—"
-                print(f"  {str(r['transaccion_id']):<20} {mq:>14} {mb:>12}  {r['estado']}")
-            if len(errores) > 10:
-                print(f"  ... y {len(errores)-10} registros más")
-
-    _print_conciliacion("PAGO QR vs EXTRACTO BANCARIO",  _store["conciliacion_pagos"])
-    _print_conciliacion("COBRO QR vs EXTRACTO BANCARIO", _store["conciliacion_cobros"])
-
-    # Saldo por cliente (DEBE / HABER / SALDO) — igual que el notebook Colab
-    debe_map:  dict = {}
-    haber_map: dict = {}
-    name_map:  dict = {}
-
-    for r in _store["pago_qr"]:
-        k = str(r.get("numero_cuenta", ""))
-        if k:
-            debe_map[k]  = debe_map.get(k, 0) + (r.get("monto_pagado") or 0)
-            name_map[k]  = r.get("creado_por", "")
-    for r in _store["retiros"]:
-        k = str(r.get("account_id", ""))
-        if k:
-            debe_map[k]  = debe_map.get(k, 0) + (r.get("crypto_quantity") or 0)
-            name_map[k]  = r.get("account_name", "")
-    for r in _store["cobro_qr"]:
-        k = str(r.get("numero_cuenta", ""))
-        if k:
-            haber_map[k] = haber_map.get(k, 0) + (r.get("monto_pagado") or 0)
-            name_map[k]  = r.get("creado_por", "")
-    for r in _store["depositos"]:
-        k = str(r.get("account_id", ""))
-        if k:
-            haber_map[k] = haber_map.get(k, 0) + (r.get("crypto_quantity") or 0)
-            name_map[k]  = r.get("account_name", "")
-
-    todas = sorted(set(debe_map) | set(haber_map))
-    saldos_tabla = [
-        {
-            "Cuenta": k,
-            "Cliente": name_map.get(k, ""),
-            "DEBE":  round(debe_map.get(k, 0), 2),
-            "HABER": round(haber_map.get(k, 0), 2),
-            "SALDO FINAL": round(haber_map.get(k, 0) - debe_map.get(k, 0), 2),
-        }
-        for k in todas
-    ]
-    saldos_tabla.sort(key=lambda x: x["Cliente"])
-
-    print(f"\n{'='*50}")
-    print(f"  ESTADO DE CUENTA (DEBE, HABER, SALDO)")
-    print(f"{'='*50}")
-    print(f"  {'Cuenta':<12} {'Cliente':<22} {'DEBE':>12} {'HABER':>12} {'SALDO FINAL':>12}")
-    print(f"  {'-'*12} {'-'*22} {'-'*12} {'-'*12} {'-'*12}")
-    for row in saldos_tabla[:15]:
-        print(f"  {row['Cuenta']:<12} {row['Cliente'][:22]:<22} {row['DEBE']:>12,.2f} {row['HABER']:>12,.2f} {row['SALDO FINAL']:>12,.2f}")
-    if len(saldos_tabla) > 15:
-        print(f"  ... y {len(saldos_tabla)-15} clientes más")
-    print(f"\n  Total clientes  : {len(saldos_tabla)}")
-    print(f"  Total DEBE      : {sum(r['DEBE']  for r in saldos_tabla):>12,.2f}")
-    print(f"  Total HABER     : {sum(r['HABER'] for r in saldos_tabla):>12,.2f}")
-    print(f"  Saldo neto      : {sum(r['SALDO FINAL'] for r in saldos_tabla):>12,.2f}")
-    print(f"{'='*50}\n")
 
     # Persist to Supabase if configured
     for table, key in [
