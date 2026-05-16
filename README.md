@@ -163,18 +163,18 @@ Si Saldo esperado ≠ Saldo real → ALERTA ⚠
 
 ---
 
-## Instalación y arranque local
+## Cómo correrlo después de clonar el repositorio
 
-### Requisitos
-- Python 3.10 o superior
-- Node.js 18 o superior
+### Requisitos previos
+- [Python 3.10+](https://www.python.org/downloads/)
+- [Node.js 18+](https://nodejs.org/)
 
-### Pasos
+### Pasos (una sola vez)
 
 ```powershell
 # 1. Clonar el repositorio
-git clone <url-del-repo>
-cd cryptoops-engine
+git clone https://github.com/dilanCimarChn/cochatech.git
+cd cochatech
 
 # 2. Instalar dependencias del backend
 cd backend
@@ -183,12 +183,26 @@ pip install -r requirements.txt
 # 3. Instalar dependencias del frontend
 cd ../frontend
 npm install
+```
 
-# 4. Copiar el Excel a la carpeta data/
-# (el backend lo carga automáticamente al arrancar)
+### Arrancar el proyecto
 
-# 5. Arrancar todo con un solo comando (Windows)
-cd ..
+Abre **dos terminales** y ejecuta una cosa en cada una:
+
+**Terminal 1 — Backend:**
+```powershell
+cd backend
+uvicorn main:app --reload --port 8000
+```
+
+**Terminal 2 — Frontend:**
+```powershell
+cd frontend
+npm run dev
+```
+
+O usa el script que abre las dos terminales automáticamente (Windows):
+```powershell
 .\start.ps1
 ```
 
@@ -197,6 +211,10 @@ cd ..
 | Frontend (app) | http://localhost:5173 |
 | Backend (API) | http://localhost:8000 |
 | Documentación API | http://localhost:8000/docs |
+
+### Cargar los datos
+
+Una vez que el sistema esté corriendo, abre http://localhost:5173, ve al **Dashboard** y usa el botón **"Cargar Excel"** para subir el archivo de Banexcoin. El sistema procesa las 9 hojas automáticamente y recuerda el archivo aunque reinicies el servidor.
 
 ---
 
