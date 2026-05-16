@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.env
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.env
+
+# Data
+data/*.xlsx
+data/*.xls
+data/*.csv
+
+# OS
+.DS_Store
+Thumbs.db

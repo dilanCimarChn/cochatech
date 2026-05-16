@@ -1,0 +1,9 @@
+fastapi==0.115.5
+uvicorn==0.32.1
+pandas==2.2.3
+openpyxl==3.1.5
+supabase==2.10.0
+python-multipart==0.0.17
+pydantic==2.10.3
+python-dotenv==1.0.1
+xlsxwriter==3.2.0
