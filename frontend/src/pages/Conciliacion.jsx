@@ -15,6 +15,7 @@ const ESTADO_INFO = {
 }
 
 const COLS = [
+  { key: 'nro', label: '#', nowrap: true },
   { key: 'transaccion_id', label: 'Nro. Transacción', nowrap: true },
   {
     key: 'tipo',
@@ -29,12 +30,12 @@ const COLS = [
   {
     key: 'monto_qr',
     label: 'Monto en sistema (BOB)',
-    render: (val) => val != null ? Number(val).toLocaleString('es-BO', { minimumFractionDigits: 2 }) : '—',
+    render: (val) => val != null ? Number(val).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '—',
   },
   {
     key: 'monto_banco',
     label: 'Monto en banco (BOB)',
-    render: (val) => val != null ? Number(val).toLocaleString('es-BO', { minimumFractionDigits: 2 }) : '—',
+    render: (val) => val != null ? Number(val).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '—',
   },
   {
     key: 'diferencia',
@@ -43,7 +44,7 @@ const COLS = [
       if (val === null || val === undefined) return '—'
       const n = Number(val)
       const color = Math.abs(n) < 0.01 ? '#22c55e' : '#ef4444'
-      return <span style={{ color, fontWeight: 600 }}>{n.toLocaleString('es-BO', { minimumFractionDigits: 2 })}</span>
+      return <span style={{ color, fontWeight: 600 }}>{n.toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
     },
   },
   { key: 'fecha', label: 'Fecha' },
@@ -61,7 +62,7 @@ export default function Conciliacion() {
 
   const load = (pg = 1) => {
     setLoading(true)
-    const params = { page: pg, page_size: 50 }
+    const params = { page: pg, page_size: 20 }
     if (estado) params.estado = estado
     if (tipo) params.tipo = tipo
     getConciliacion(params)

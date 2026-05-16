@@ -37,11 +37,19 @@ def reconcile_pagos(pago_qr: list[dict], extracto_pagos: list[dict]) -> list[dic
     df_qr = pd.DataFrame(pago_qr) if pago_qr else pd.DataFrame()
     df_banco = pd.DataFrame(extracto_pagos) if extracto_pagos else pd.DataFrame()
 
+    print(f"\n[reconcile_pagos] pago_qr={len(df_qr)} filas  |  extracto_pagos={len(df_banco)} filas")
+
     if df_qr.empty and df_banco.empty:
         return []
 
     df_qr = _valid(df_qr, "transaccion_id") if not df_qr.empty else df_qr
     df_banco = _valid(df_banco, "codigo_transaccion") if not df_banco.empty else df_banco
+
+    print(f"[reconcile_pagos] con TID válido → qr={len(df_qr)}  banco={len(df_banco)}")
+    if not df_qr.empty:
+        print(f"  TIDs qr    (primeros 5): {df_qr['_tid'].head().tolist()}")
+    if not df_banco.empty:
+        print(f"  TIDs banco (primeros 5): {df_banco['_tid'].head().tolist()}")
 
     # Si solo hay un lado
     if df_qr.empty:
@@ -54,6 +62,9 @@ def reconcile_pagos(pago_qr: list[dict], extracto_pagos: list[dict]) -> list[dic
         df_banco[["_tid", "importe_bolivianos", "fecha"]],
         on="_tid", how="outer", indicator=True,
     )
+
+    counts = merged["_merge"].value_counts().to_dict()
+    print(f"[reconcile_pagos] merge → {counts}")
 
     results = []
     for _, row in merged.iterrows():
@@ -80,6 +91,11 @@ def reconcile_pagos(pago_qr: list[dict], extracto_pagos: list[dict]) -> list[dic
             "fuente_banco": ind in ("both", "right_only"),
             "monto_qr": mq, "monto_banco": mb, "diferencia": diff, "fecha": fecha,
         })
+
+    conciliados = [r for r in results if r["estado"] == "CONCILIADO"]
+    print(f"[reconcile_pagos] CONCILIADOS: {len(conciliados)}")
+    for r in conciliados[:5]:
+        print(f"  {r}")
     return results
 
 
@@ -90,11 +106,19 @@ def reconcile_cobros(cobro_qr: list[dict], extracto_cobros: list[dict]) -> list[
     df_qr = pd.DataFrame(cobro_qr) if cobro_qr else pd.DataFrame()
     df_banco = pd.DataFrame(extracto_cobros) if extracto_cobros else pd.DataFrame()
 
+    print(f"\n[reconcile_cobros] cobro_qr={len(df_qr)} filas  |  extracto_cobros={len(df_banco)} filas")
+
     if df_qr.empty and df_banco.empty:
         return []
 
     df_qr = _valid(df_qr, "transaccion_id") if not df_qr.empty else df_qr
     df_banco = _valid(df_banco, "codigo_transaccion") if not df_banco.empty else df_banco
+
+    print(f"[reconcile_cobros] con TID válido → qr={len(df_qr)}  banco={len(df_banco)}")
+    if not df_qr.empty:
+        print(f"  TIDs qr    (primeros 5): {df_qr['_tid'].head().tolist()}")
+    if not df_banco.empty:
+        print(f"  TIDs banco (primeros 5): {df_banco['_tid'].head().tolist()}")
 
     if df_qr.empty:
         return [_make(row, "cobro", "SOLO_EN_BANCO", monto_banco=_f(row, "importe_bolivianos")) for _, row in df_banco.iterrows()]
@@ -109,6 +133,9 @@ def reconcile_cobros(cobro_qr: list[dict], extracto_cobros: list[dict]) -> list[
         df_banco[["_tid", "importe_bolivianos", "fecha"]],
         on="_tid", how="outer", indicator=True,
     )
+
+    counts = merged["_merge"].value_counts().to_dict()
+    print(f"[reconcile_cobros] merge → {counts}")
 
     results = []
     for _, row in merged.iterrows():
@@ -135,6 +162,11 @@ def reconcile_cobros(cobro_qr: list[dict], extracto_cobros: list[dict]) -> list[
             "fuente_banco": ind in ("both", "right_only"),
             "monto_qr": mq, "monto_banco": mb, "diferencia": diff, "fecha": fecha,
         })
+
+    conciliados = [r for r in results if r["estado"] == "CONCILIADO"]
+    print(f"[reconcile_cobros] CONCILIADOS: {len(conciliados)}")
+    for r in conciliados[:5]:
+        print(f"  {r}")
     return results
 
 
@@ -218,7 +250,54 @@ def reconcile_saldos(
 
 
 # ──────────────────────────────────────────────
-# 4. Métricas generales
+# 4. Saldo BOB por cliente (S-001 y S-002)
+#    Pagos QR → DEBE (el cliente pagó, sale BOB)
+#    Cobros QR → HABER (el cliente cobró, entra BOB)
+# ──────────────────────────────────────────────
+def reconcile_saldos_bob(
+    pagos_qr: list[dict],
+    cobros_qr: list[dict],
+) -> list[dict]:
+    debe: Dict[str, float] = {}
+    haber: Dict[str, float] = {}
+    names: Dict[str, str] = {}
+
+    def _add_bob(store: Dict[str, float], row: dict, monto_keys: list):
+        cuenta = str(row.get("numero_cuenta", row.get("cuenta", ""))).strip()
+        if not cuenta or cuenta.lower() in _INVALID:
+            return
+        nombre = str(row.get("creado_por", row.get("nombre", ""))).strip()
+        monto = next((row.get(k, 0) or 0 for k in monto_keys if row.get(k) is not None), 0)
+        store[cuenta] = store.get(cuenta, 0.0) + float(monto)
+        if nombre:
+            names[cuenta] = nombre
+
+    for p in pagos_qr:
+        _add_bob(debe, p, ["monto_pagado", "monto_intercambio"])
+
+    for c in cobros_qr:
+        _add_bob(haber, c, ["monto_pagado", "importe_neto", "monto_intercambio"])
+
+    all_cuentas = set(debe.keys()) | set(haber.keys())
+    results = []
+    for cuenta in all_cuentas:
+        d = round(debe.get(cuenta, 0.0), 2)
+        h = round(haber.get(cuenta, 0.0), 2)
+        saldo = round(h - d, 2)
+        results.append({
+            "numero_cuenta": cuenta,
+            "cliente": names.get(cuenta, ""),
+            "debe_bob": d,
+            "haber_bob": h,
+            "saldo_bob": saldo,
+        })
+
+    results.sort(key=lambda x: abs(x["saldo_bob"]), reverse=True)
+    return results
+
+
+# ──────────────────────────────────────────────
+# 5. Métricas generales
 # ──────────────────────────────────────────────
 def compute_metricas(
     conciliacion_pagos: list[dict],
@@ -230,10 +309,16 @@ def compute_metricas(
 ) -> dict:
     all_r = conciliacion_pagos + conciliacion_cobros
     total = len(all_r)
-    conciliadas  = sum(1 for r in all_r if r["estado"] == "CONCILIADO")
+    conciliadas   = sum(1 for r in all_r if r["estado"] == "CONCILIADO")
     discrepancias = sum(1 for r in all_r if r["estado"] == "DISCREPANCIA")
-    solo_qr      = sum(1 for r in all_r if r["estado"] == "SOLO_EN_QR")
-    solo_banco   = sum(1 for r in all_r if r["estado"] == "SOLO_EN_BANCO")
+    solo_qr       = sum(1 for r in all_r if r["estado"] == "SOLO_EN_QR")
+    solo_banco    = sum(1 for r in all_r if r["estado"] == "SOLO_EN_BANCO")
+
+    # Monto total en riesgo por categoría
+    monto_solo_qr    = round(sum(abs(r["monto_qr"]    or 0) for r in all_r if r["estado"] == "SOLO_EN_QR"),    2)
+    monto_solo_banco = round(sum(abs(r["monto_banco"] or 0) for r in all_r if r["estado"] == "SOLO_EN_BANCO"), 2)
+    monto_discrepancia = round(sum(abs(r["diferencia"] or 0) for r in all_r if r["estado"] == "DISCREPANCIA"),  2)
+    monto_en_riesgo  = round(monto_solo_qr + monto_solo_banco + monto_discrepancia, 2)
 
     return {
         "total_transacciones":    total,
@@ -241,11 +326,15 @@ def compute_metricas(
         "discrepancias":          discrepancias,
         "solo_en_qr":             solo_qr,
         "solo_en_banco":          solo_banco,
+        "tasa_conciliacion":      round((conciliadas / total) * 100, 2) if total > 0 else 0.0,
+        "monto_solo_qr_bob":      monto_solo_qr,
+        "monto_solo_banco_bob":   monto_solo_banco,
+        "monto_discrepancia_bob": monto_discrepancia,
+        "monto_en_riesgo_bob":    monto_en_riesgo,
         "total_usdt_depositado":  round(sum(d.get("crypto_quantity", 0) or 0 for d in depositos), 4),
         "total_usdt_retirado":    round(sum(r.get("crypto_quantity", 0) or 0 for r in retiros), 4),
         "total_bob_pagos":        round(sum(p.get("monto_pagado", 0) or 0 for p in pagos_qr), 2),
         "total_bob_cobros":       round(sum((c.get("monto_pagado") or c.get("importe_neto") or 0) for c in cobros_qr), 2),
-        "tasa_conciliacion":      round((conciliadas / total) * 100, 2) if total > 0 else 0.0,
     }
 
 

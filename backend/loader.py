@@ -76,16 +76,33 @@ def _read_sheet(xl: pd.ExcelFile, sheet_name: str) -> pd.DataFrame:
 
 def load_excel(file_path: str) -> Dict[str, pd.DataFrame]:
     xl = pd.ExcelFile(file_path)
+    print(f"\n{'='*60}")
+    print(f"EXCEL: {file_path}")
+    print(f"Hojas disponibles: {xl.sheet_names}")
+    print(f"{'='*60}")
     result = {}
 
     for key, candidates in SHEET_MAP.items():
         sheet_name = _find_sheet(xl, candidates)
         if sheet_name:
-            result[key] = _read_sheet(xl, sheet_name)
+            df = _read_sheet(xl, sheet_name)
+            result[key] = df
+            print(f"\n[{key}] <- hoja '{sheet_name}' ({len(df)} filas)")
+            print(f"  Cabeceras originales : {list(xl.parse(sheet_name, nrows=0).columns)}")
+            print(f"  Cabeceras normalizadas: {list(df.columns)}")
         else:
             result[key] = pd.DataFrame()
+            print(f"\n[{key}] <- NO ENCONTRADA (buscando: {candidates})")
 
+    print(f"\n{'='*60}\n")
     return result
+
+
+_COMPLETED_STATUSES = {"completed", "fully_processed", "fully processed"}
+
+
+def _is_completed(val: Any) -> bool:
+    return str(val).strip().lower().replace("_", " ") in _COMPLETED_STATUSES
 
 
 def normalize_depositos(df: pd.DataFrame) -> list[dict]:
@@ -103,6 +120,10 @@ def normalize_depositos(df: pd.DataFrame) -> list[dict]:
     }
 
     for _, row in df.iterrows():
+        status_val = row.get("ticket_status", row.get("status", row.get("estado", "")))
+        if not _is_completed(status_val):
+            continue
+
         rec = {}
         for field, candidates in col_map.items():
             for c in candidates:
@@ -111,9 +132,6 @@ def normalize_depositos(df: pd.DataFrame) -> list[dict]:
                     break
             else:
                 rec[field] = ""
-
-        if field in ["crypto_quantity"]:
-            rec[field] = _clean_float(row.get("crypto_quantity", 0))
 
         rec["fecha"] = _clean_date(rec.get("fecha", ""))
         rec["crypto_quantity"] = _clean_float(
@@ -126,6 +144,10 @@ def normalize_depositos(df: pd.DataFrame) -> list[dict]:
 def normalize_retiros(df: pd.DataFrame) -> list[dict]:
     rows = []
     for _, row in df.iterrows():
+        status_val = row.get("ticket_status", row.get("status", row.get("estado", "")))
+        if not _is_completed(status_val):
+            continue
+
         rec = {
             "user_id": _clean_str(row.get("user_id", row.get("userid", ""))),
             "account_id": _clean_str(row.get("account_id", row.get("accountid", ""))),
@@ -147,6 +169,10 @@ def normalize_retiros(df: pd.DataFrame) -> list[dict]:
 def normalize_pago_qr(df: pd.DataFrame) -> list[dict]:
     rows = []
     for _, row in df.iterrows():
+        status_val = row.get("estado", row.get("status", row.get("state", "")))
+        if not _is_completed(status_val):
+            continue
+
         tid = _clean_str(
             row.get(
                 "transaccion_id",
@@ -184,6 +210,10 @@ def normalize_pago_qr(df: pd.DataFrame) -> list[dict]:
 def normalize_cobro_qr(df: pd.DataFrame) -> list[dict]:
     rows = []
     for _, row in df.iterrows():
+        status_val = row.get("estado", row.get("status", row.get("state", "")))
+        if not _is_completed(status_val):
+            continue
+
         tid = _clean_str(
             row.get(
                 "transaccion_id",
@@ -281,8 +311,11 @@ def normalize_extracto_pagos(df: pd.DataFrame) -> list[dict]:
         )
         importe = _clean_float(
             row.get(
-                "importe_bolivianos",
-                row.get("importe", row.get("monto", row.get("amount", row.get("bolivianos", 0)))),
+                "importe_en_bolivianos",
+                row.get(
+                    "importe_bolivianos",
+                    row.get("importe", row.get("monto", row.get("amount", row.get("bolivianos", 0)))),
+                ),
             )
         )
         rec = {

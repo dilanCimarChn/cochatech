@@ -1,14 +1,18 @@
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
-import Conciliacion from './pages/Conciliacion'
+import ConciliacionPagos from './pages/ConciliacionPagos'
+import ConciliacionCobros from './pages/ConciliacionCobros'
+import SaldosBob from './pages/SaldosBob'
 import Saldos from './pages/Saldos'
 import Reporte from './pages/Reporte'
 
 const NAV = [
-  { to: '/',             label: 'Dashboard',              sub: 'Resumen general' },
-  { to: '/conciliacion', label: 'Conciliación',           sub: 'QR vs Banco (alertas)' },
-  { to: '/saldos',       label: 'Saldos por cliente',     sub: 'Saldo esperado vs real' },
-  { to: '/reporte',      label: 'Exportar reporte',       sub: 'Excel y PDF' },
+  { to: '/',                    label: 'Dashboard',           sub: 'Resumen general' },
+  { to: '/conciliacion/pagos',  label: 'Pagos QR',            sub: 'S-001 vs Extracto pagos' },
+  { to: '/conciliacion/cobros', label: 'Cobros QR',           sub: 'S-002 vs Extracto cobros' },
+  { to: '/saldos/bob',          label: 'Saldo BOB',           sub: 'Debe, Haber y Saldo' },
+  { to: '/saldos',              label: 'Saldo USDT',          sub: 'Saldo cripto por cliente' },
+  { to: '/reporte',             label: 'Exportar',            sub: 'Excel y PDF' },
 ]
 
 export default function App() {
@@ -59,7 +63,9 @@ export default function App() {
         <main style={{ flex: 1, overflowY: 'auto', minWidth: 0 }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/conciliacion" element={<Conciliacion />} />
+            <Route path="/conciliacion/pagos"  element={<ConciliacionPagos />} />
+            <Route path="/conciliacion/cobros" element={<ConciliacionCobros />} />
+            <Route path="/saldos/bob" element={<SaldosBob />} />
             <Route path="/saldos" element={<Saldos />} />
             <Route path="/reporte" element={<Reporte />} />
           </Routes>

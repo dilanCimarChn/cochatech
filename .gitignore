@@ -1,24 +1,53 @@
-# Python
+# ── Python ──────────────────────────────────────
 __pycache__/
 *.py[cod]
-.env
+*.pyo
+*.pyd
 *.egg-info/
 dist/
 build/
 
-# Node
+# ── Entorno virtual ──────────────────────────────
+venv/
+env/
+.venv/
+
+# ── Variables de entorno / secretos ─────────────
+.env
+backend/.env
+frontend/.env
+*.env.local
+*.env.production
+*.secret
+*.pem
+*.key
+
+# ── Datos y archivos Excel subidos ───────────────
+data/
+*.xlsx
+*.xls
+*.csv
+
+# ── Logs ─────────────────────────────────────────
+*.log
+logs/
+
+# ── Node / frontend ──────────────────────────────
 node_modules/
 frontend/dist/
-frontend/.env
+frontend/.vite/
+frontend/node_modules/
 
-# Data
-data/*.xlsx
-data/*.xls
-data/*.csv
+# ── IDEs ─────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.user
 
-# OS
+# ── OS ───────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Docker
+# ── Docker ───────────────────────────────────────
 .dockerignore

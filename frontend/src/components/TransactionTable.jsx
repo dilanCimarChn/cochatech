@@ -9,7 +9,7 @@ const ROW_COLORS = {
 
 function fmt(val) {
   if (val === null || val === undefined) return '—'
-  if (typeof val === 'number') return val.toLocaleString('es-BO', { minimumFractionDigits: 2 })
+  if (typeof val === 'number') return val.toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
   if (typeof val === 'boolean') return val ? 'Sí' : 'No'
   return String(val).split('T')[0] || '—'
 }
