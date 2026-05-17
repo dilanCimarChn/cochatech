@@ -394,7 +394,11 @@ def get_conciliacion_pagos(
         raise HTTPException(status_code=404, detail="No hay datos cargados.")
 
     todos = _store["conciliacion_pagos"]
-    data  = [r for r in todos if r["estado"] == estado.upper()] if estado else todos
+    if estado:
+        e = estado.upper()
+        data = [r for r in todos if r["estado"] != "CONCILIADO"] if e == "DISCREPANCIA" else [r for r in todos if r["estado"] == e]
+    else:
+        data = todos
     result = _paginar(data, page, page_size)
     result["resumen"] = _resumen(todos)
     return result
@@ -410,7 +414,11 @@ def get_conciliacion_cobros(
         raise HTTPException(status_code=404, detail="No hay datos cargados.")
 
     todos = _store["conciliacion_cobros"]
-    data  = [r for r in todos if r["estado"] == estado.upper()] if estado else todos
+    if estado:
+        e = estado.upper()
+        data = [r for r in todos if r["estado"] != "CONCILIADO"] if e == "DISCREPANCIA" else [r for r in todos if r["estado"] == e]
+    else:
+        data = todos
     result = _paginar(data, page, page_size)
     result["resumen"] = _resumen(todos)
     return result

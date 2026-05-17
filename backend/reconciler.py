@@ -66,8 +66,11 @@ def reconcile_pagos(pago_qr: list[dict], extracto_pagos: list[dict]) -> list[dic
         fecha = _s(row, "fecha_creacion") or _s(row, "fecha")
 
         if ind == "both":
-            diff   = round(abs(mq or 0) - abs(mb or 0), 4)
-            estado = "CONCILIADO" if abs(diff) < 0.01 else "DISCREPANCIA"
+            if mq is None or mb is None:
+                diff, estado = None, "DISCREPANCIA"
+            else:
+                diff   = round(abs(mq) - abs(mb), 4)
+                estado = "CONCILIADO" if abs(diff) < 0.01 else "DISCREPANCIA"
         elif ind == "left_only":
             diff, estado = None, "SOLO_EN_QR"
         else:
@@ -125,8 +128,11 @@ def reconcile_cobros(cobro_qr: list[dict], extracto_cobros: list[dict]) -> list[
         fecha = _s(row, "fecha_creacion") or _s(row, "fecha")
 
         if ind == "both":
-            diff   = round(abs(mq or 0) - abs(mb or 0), 4)
-            estado = "CONCILIADO" if abs(diff) < 0.01 else "DISCREPANCIA"
+            if mq is None or mb is None:
+                diff, estado = None, "DISCREPANCIA"
+            else:
+                diff   = round(abs(mq) - abs(mb), 4)
+                estado = "CONCILIADO" if abs(diff) < 0.01 else "DISCREPANCIA"
         elif ind == "left_only":
             diff, estado = None, "SOLO_EN_QR"
         else:
@@ -146,8 +152,12 @@ def reconcile_cobros(cobro_qr: list[dict], extracto_cobros: list[dict]) -> list[
 
 
 # ──────────────────────────────────────────────
-# 3. Saldo USDT por cliente (S-003, S-004, S-005)
-#    BOB no entra aquí — son monedas distintas
+# 3. Saldo USDT por cliente (todos los servicios)
+#    S-004 Depósitos    → +crypto_quantity
+#    S-003 Retiros      → -crypto_quantity - fee
+#    S-001 Pagos QR     → -monto_intercambio (vendió USDT por BOB)
+#    S-002 Cobros QR    → +monto_intercambio (compró USDT con BOB)
+#    S-005 Banextransfer→ sender - / receiver +
 # ──────────────────────────────────────────────
 def reconcile_saldos(
     depositos: list[dict],
@@ -168,13 +178,28 @@ def reconcile_saldos(
         if name:
             names[aid] = str(name).strip()
 
+    # S-004 Depósitos → cliente recibe USDT
     for d in depositos:
         _add(d.get("account_id", ""), d.get("account_name", ""), +(d.get("crypto_quantity", 0) or 0))
 
+    # S-003 Retiros → cliente envía USDT (cantidad + fee)
     for r in retiros:
         qty = (r.get("crypto_quantity", 0) or 0) + (r.get("crypto_fee", 0) or 0)
         _add(r.get("account_id", ""), r.get("account_name", ""), -qty)
 
+    # S-001 Pagos QR → cliente vendió USDT por BOB → resta USDT (monto_intercambio)
+    for p in pagos_qr:
+        cuenta = str(p.get("numero_cuenta", p.get("account_id", ""))).strip()
+        nombre = str(p.get("creado_por", p.get("account_name", ""))).strip()
+        _add(cuenta, nombre, -float(p.get("monto_intercambio", 0) or 0))
+
+    # S-002 Cobros QR → cliente compró USDT con BOB → suma USDT (monto_intercambio)
+    for c in cobros_qr:
+        cuenta = str(c.get("numero_cuenta", c.get("account_id", ""))).strip()
+        nombre = str(c.get("creado_por", c.get("account_name", ""))).strip()
+        _add(cuenta, nombre, +float(c.get("monto_intercambio", 0) or 0))
+
+    # S-005 Banextransfer → sender pierde, receiver gana (en USDT)
     for t in transfers:
         amount = t.get("amount", 0) or 0
         _add(t.get("sender_account", ""),   t.get("sender_alias", ""),   -amount)

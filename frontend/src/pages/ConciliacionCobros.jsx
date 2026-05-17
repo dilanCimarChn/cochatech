@@ -80,7 +80,8 @@ export default function ConciliacionCobros() {
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {[
             { label: 'Conciliados',       valor: resumen.conciliados,   color: '#22c55e', sub: `de ${resumen.total} registros` },
-            { label: 'Discrepancias',     valor: resumen.discrepancias, color: '#ef4444', sub: 'Montos distintos' },
+            { label: 'Discrepancias',     valor: resumen.discrepancias + resumen.solo_en_qr + resumen.solo_en_banco, color: '#ef4444', sub: 'Total sin conciliar' },
+            { label: 'Monto distinto',    valor: resumen.discrepancias, color: '#f97316', sub: 'Mismo TID, monto diferente' },
             { label: 'Solo en Sistema',   valor: resumen.solo_en_qr,    color: '#f59e0b', sub: 'No están en banco' },
             { label: 'Solo en Banco',     valor: resumen.solo_en_banco, color: '#3b82f6', sub: 'No están en sistema' },
             { label: 'Tasa conciliación', valor: `${resumen.tasa_conciliacion}%`, color: '#a78bfa', sub: `BOB ${Number(resumen.monto_conciliado_bob).toLocaleString('es-BO')}` },

@@ -185,7 +185,7 @@ def normalize_pago_qr(df: pd.DataFrame) -> list[dict]:
             "estado": _clean_str(row.get("estado", row.get("status", row.get("state", "")))),
             "creado_por": _clean_str(row.get("creado_por", row.get("created_by", row.get("usuario", "")))),
             "numero_cuenta": _clean_str(
-                row.get("numero_cuenta", row.get("cuenta", row.get("account", row.get("n_mero_de_cuenta", ""))))
+                row.get("numero_cuenta", row.get("numero_de_cuenta", row.get("cuenta", row.get("account", ""))))
             ),
             "monto_intercambio": _clean_float(
                 row.get("monto_intercambio", row.get("exchange_amount", 0))
@@ -223,7 +223,7 @@ def normalize_cobro_qr(df: pd.DataFrame) -> list[dict]:
             "estado": _clean_str(row.get("estado", row.get("status", ""))),
             "creado_por": _clean_str(row.get("creado_por", row.get("created_by", ""))),
             "numero_cuenta": _clean_str(
-                row.get("numero_cuenta", row.get("cuenta", row.get("n_mero_de_cuenta", "")))
+                row.get("numero_cuenta", row.get("numero_de_cuenta", row.get("cuenta", row.get("account", ""))))
             ),
             "monto_intercambio": _clean_float(row.get("monto_intercambio", 0)),
             "monto_pagado": _clean_float(
