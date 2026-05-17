@@ -1,9 +1,10 @@
 import io
+import json
 import os
 import tempfile
-from typing import Optional
+from typing import List, Optional
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -47,8 +48,8 @@ _store: dict = {
 
 
 
-def _process_excel(file_path: str):
-    sheets = loader.load_excel(file_path)
+def _process_excel(file_path: str, selected_sheets: Optional[List[str]] = None):
+    sheets = loader.load_excel(file_path, selected_sheets=selected_sheets)
 
     _store["depositos"] = loader.normalize_depositos(sheets.get("depositos", pd.DataFrame()))
     _store["retiros"] = loader.normalize_retiros(sheets.get("retiros", pd.DataFrame()))
@@ -142,7 +143,10 @@ def debug_columnas():
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...)):
+async def upload(
+    file: UploadFile = File(...),
+    sheets: Optional[str] = Form(None),  # JSON list of sheet names from onboarding
+):
     if not file.filename.endswith((".xlsx", ".xls", ".csv")):
         raise HTTPException(status_code=400, detail="Solo se aceptan archivos Excel (.xlsx, .xls) o CSV")
 
@@ -151,7 +155,8 @@ async def upload(file: UploadFile = File(...)):
     try:
         with os.fdopen(tmp_fd, "wb") as tmp:
             tmp.write(content)
-        _process_excel(tmp_path)
+        selected = json.loads(sheets) if sheets else None
+        _process_excel(tmp_path, selected_sheets=selected)
         # Persist so the server can reload after restart without re-uploading
         os.makedirs(_DATA_DIR, exist_ok=True)
         with open(_LAST_UPLOAD, "wb") as f:
@@ -180,6 +185,157 @@ async def upload(file: UploadFile = File(...)):
             "discrepancias": metricas.get("discrepancias", 0) + metricas.get("solo_en_qr", 0) + metricas.get("solo_en_banco", 0),
         },
     }
+
+
+@app.post("/upload-csv")
+async def upload_csv(
+    files: List[UploadFile] = File(...),
+    metadata: str = Form(...),  # JSON: [{filename, sheet_type, column_map: {orig_col: target_col}}]
+):
+    """
+    Recibe múltiples archivos CSV, cada uno mapeado a un tipo de hoja del sistema.
+    El campo `metadata` es un JSON array con:
+      - filename:   nombre del archivo tal como viene
+      - sheet_type: clave interna (depositos, retiros, pago_qr, cobro_qr, transfers,
+                    saldos, extracto_pagos, extracto_cobros)
+      - column_map: dict {columna_original: columna_destino} para renombrar columnas
+    """
+    try:
+        meta_list = json.loads(metadata)
+    except Exception:
+        raise HTTPException(status_code=400, detail="El campo metadata no es un JSON válido.")
+
+    meta_by_name = {m["filename"]: m for m in meta_list}
+
+    # Leer cada CSV y construir DataFrames con las columnas renombradas
+    dfs: dict = {k: pd.DataFrame() for k in _store if k not in ("loaded", "metricas",
+                  "conciliacion_pagos", "conciliacion_cobros", "saldos_resultado", "saldos_bob")}
+
+    for upload in files:
+        content = await upload.read()
+        meta = meta_by_name.get(upload.filename, {})
+        sheet_type = meta.get("sheet_type", "")
+        col_map = meta.get("column_map", {})
+
+        if not sheet_type:
+            continue
+
+        try:
+            df = pd.read_csv(io.BytesIO(content), dtype=str, encoding="utf-8-sig")
+        except Exception:
+            try:
+                df = pd.read_csv(io.BytesIO(content), dtype=str, encoding="latin-1")
+            except Exception as e:
+                raise HTTPException(status_code=422, detail=f"Error leyendo {upload.filename}: {str(e)}")
+
+        # Normalizar nombres de columnas
+        from loader import _normalize_col
+        df.columns = [_normalize_col(str(c)) for c in df.columns]
+
+        # Aplicar mapeo de columnas del usuario
+        if col_map:
+            norm_map = {_normalize_col(k): _normalize_col(v) for k, v in col_map.items()}
+            df = df.rename(columns=norm_map)
+
+        df = df.dropna(how="all")
+
+        if sheet_type in dfs:
+            if dfs[sheet_type].empty:
+                dfs[sheet_type] = df
+            else:
+                dfs[sheet_type] = pd.concat([dfs[sheet_type], df], ignore_index=True)
+
+    # Procesar con las funciones de normalización existentes
+    _store["depositos"]      = loader.normalize_depositos(dfs.get("depositos", pd.DataFrame()))
+    _store["retiros"]        = loader.normalize_retiros(dfs.get("retiros", pd.DataFrame()))
+    _store["pago_qr"]        = loader.normalize_pago_qr(dfs.get("pago_qr", pd.DataFrame()))
+    _store["cobro_qr"]       = loader.normalize_cobro_qr(dfs.get("cobro_qr", pd.DataFrame()))
+    _store["transfers"]      = loader.normalize_transfers(dfs.get("transfers", pd.DataFrame()))
+    _store["saldos"]         = loader.normalize_saldos(dfs.get("saldos", pd.DataFrame()))
+    _store["extracto_pagos"] = loader.normalize_extracto_pagos(dfs.get("extracto_pagos", pd.DataFrame()))
+    _store["extracto_cobros"]= loader.normalize_extracto_cobros(dfs.get("extracto_cobros", pd.DataFrame()))
+
+    # Correr motor de conciliación igual que en /upload
+    _store["saldos_bob"] = reconciler.reconcile_saldos_bob(_store["pago_qr"], _store["cobro_qr"])
+    _store["conciliacion_pagos"] = reconciler.reconcile_pagos(_store["pago_qr"], _store["extracto_pagos"])
+    _store["conciliacion_cobros"] = reconciler.reconcile_cobros(_store["cobro_qr"], _store["extracto_cobros"])
+    _store["saldos_resultado"] = reconciler.reconcile_saldos(
+        _store["depositos"], _store["retiros"], _store["pago_qr"],
+        _store["cobro_qr"], _store["transfers"], _store["saldos"],
+    )
+    _store["metricas"] = reconciler.compute_metricas(
+        _store["conciliacion_pagos"], _store["conciliacion_cobros"],
+        _store["depositos"], _store["retiros"], _store["pago_qr"], _store["cobro_qr"],
+    )
+    _store["loaded"] = True
+
+    metricas = _store["metricas"]
+    return {
+        "ok": True,
+        "resumen": {
+            "depositos": len(_store["depositos"]),
+            "retiros": len(_store["retiros"]),
+            "pago_qr": len(_store["pago_qr"]),
+            "cobro_qr": len(_store["cobro_qr"]),
+            "transfers": len(_store["transfers"]),
+            "extracto_pagos": len(_store["extracto_pagos"]),
+            "extracto_cobros": len(_store["extracto_cobros"]),
+            "discrepancias": metricas.get("discrepancias", 0) + metricas.get("solo_en_qr", 0) + metricas.get("solo_en_banco", 0),
+        },
+    }
+
+
+@app.post("/preview")
+async def preview(file: UploadFile = File(...)):
+    """
+    Recibe un Excel y devuelve sus hojas con columnas y muestra de filas.
+    El frontend lo usa para el onboarding de selección de tablas/columnas.
+    No modifica el store — solo lectura.
+    """
+    if not file.filename.endswith((".xlsx", ".xls", ".csv")):
+        raise HTTPException(status_code=400, detail="Solo se aceptan archivos Excel (.xlsx, .xls) o CSV")
+
+    content = await file.read()
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
+    try:
+        with os.fdopen(tmp_fd, "wb") as tmp:
+            tmp.write(content)
+
+        xl = pd.ExcelFile(tmp_path)
+        sheets_info = []
+        for sheet_name in xl.sheet_names:
+            try:
+                df = xl.parse(sheet_name, dtype=str, nrows=5)
+                # Limpia nombres de columnas
+                cols = [str(c).strip() for c in df.columns if str(c).strip() and not str(c).startswith("Unnamed")]
+                # Muestra las primeras 3 filas como lista de dicts
+                sample = df.head(3).fillna("").to_dict(orient="records")
+                # Limpia las keys de sample para que coincidan con cols limpios
+                clean_sample = []
+                for row in sample:
+                    clean_row = {str(k).strip(): str(v) for k, v in row.items() if str(k).strip() and not str(k).startswith("Unnamed")}
+                    clean_sample.append(clean_row)
+                sheets_info.append({
+                    "name": sheet_name,
+                    "columns": cols,
+                    "sample": clean_sample,
+                    "total_rows": len(xl.parse(sheet_name, dtype=str)),
+                })
+            except Exception as e:
+                sheets_info.append({
+                    "name": sheet_name,
+                    "columns": [],
+                    "sample": [],
+                    "total_rows": 0,
+                    "error": str(e),
+                })
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+    return {"sheets": sheets_info, "filename": file.filename}
 
 
 @app.get("/metricas")
