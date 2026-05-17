@@ -4,10 +4,30 @@ const BASE = import.meta.env.VITE_API_URL || '/api'
 
 export const api = axios.create({ baseURL: BASE })
 
+export const previewExcel = (file) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/preview', form)
+}
+
 export const uploadExcel = (file) => {
   const form = new FormData()
   form.append('file', file)
   return api.post('/upload', form)
+}
+
+export const uploadExcelSheets = (file, selectedSheets) => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('sheets', JSON.stringify(selectedSheets))
+  return api.post('/upload', form)
+}
+
+export const uploadCsv = (files, metadata) => {
+  const form = new FormData()
+  files.forEach(f => form.append('files', f))
+  form.append('metadata', JSON.stringify(metadata))
+  return api.post('/upload-csv', form)
 }
 
 export const getMetricas = () => api.get('/metricas')

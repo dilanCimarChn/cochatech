@@ -74,16 +74,21 @@ def _read_sheet(xl: pd.ExcelFile, sheet_name: str) -> pd.DataFrame:
     return df
 
 
-def load_excel(file_path: str) -> Dict[str, pd.DataFrame]:
+def load_excel(file_path: str, selected_sheets: list = None) -> Dict[str, pd.DataFrame]:
     xl     = pd.ExcelFile(file_path)
     result = {}
     for key, candidates in SHEET_MAP.items():
         sheet_name = _find_sheet(xl, candidates)
         if sheet_name:
-            result[key] = _read_sheet(xl, sheet_name)
+            # Si el usuario eligió hojas específicas, saltamos las no seleccionadas
+            if selected_sheets is not None and sheet_name not in selected_sheets:
+                result[key] = pd.DataFrame()
+            else:
+                result[key] = _read_sheet(xl, sheet_name)
         else:
             result[key] = pd.DataFrame()
     return result
+
 
 
 _COMPLETED_STATUSES = {"completed", "fully_processed", "fully processed"}
