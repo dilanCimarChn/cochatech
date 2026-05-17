@@ -47,12 +47,12 @@ export default function UploadButton({ onSuccess, compact = false }) {
     setPreviewing(false)
   }
 
-  const handleExcelConfirm = async (selectedSheets) => {
+  const handleExcelConfirm = async (sheetConfig) => {
     if (!pendingFile) return
     setLoading(true)
     setError(null)
     try {
-      const res = await uploadExcelSheets(pendingFile, selectedSheets)
+      const res = await uploadExcelSheets(pendingFile, sheetConfig)
       setPreviewData(null)
       setPendingFile(null)
       onSuccess?.(res.data)

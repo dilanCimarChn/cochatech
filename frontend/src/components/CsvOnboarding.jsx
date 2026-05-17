@@ -52,7 +52,7 @@ function StepDropFiles({ files, onAddFiles, onRemove }) {
 
   return (
     <div>
-      <p style={{ color: '#94a3b8', fontSize: 13, marginBottom: 14 }}>
+      <p style={{ color: '#94a3b8', fontSize: 15, marginBottom: 14 }}>
         Sube uno o varios archivos CSV. Cada archivo puede representar un tipo de operación distinto.
       </p>
 
@@ -70,11 +70,11 @@ function StepDropFiles({ files, onAddFiles, onRemove }) {
           transition: 'all 0.2s',
         }}
       >
-        <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
-        <div style={{ color: '#e2e8f0', fontWeight: 600, fontSize: 14 }}>
+        <div style={{ fontSize: 38, marginBottom: 8 }}>📄</div>
+        <div style={{ color: '#e2e8f0', fontWeight: 600, fontSize: 16 }}>
           Arrastra archivos CSV aquí
         </div>
-        <div style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>
+        <div style={{ color: '#64748b', fontSize: 14, marginTop: 4 }}>
           o <span style={{ color: '#3b82f6', textDecoration: 'underline' }}>haz clic para seleccionar</span>
         </div>
         <input
@@ -94,7 +94,7 @@ function StepDropFiles({ files, onAddFiles, onRemove }) {
       {/* Lista de archivos agregados */}
       {files.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ color: '#64748b', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>
+          <div style={{ color: '#64748b', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>
             Archivos cargados ({files.length})
           </div>
           {files.map((f, i) => (
@@ -103,14 +103,14 @@ function StepDropFiles({ files, onAddFiles, onRemove }) {
               background: '#1e293b', borderRadius: 8, padding: '10px 14px',
               border: '1px solid #334155',
             }}>
-              <span style={{ fontSize: 18 }}>📄</span>
+              <span style={{ fontSize: 20 }}>📄</span>
               <div style={{ flex: 1 }}>
-                <div style={{ color: '#e2e8f0', fontSize: 13, fontWeight: 600 }}>{f.file.name}</div>
-                <div style={{ color: '#64748b', fontSize: 11 }}>{f.columns.length} columnas · {(f.file.size / 1024).toFixed(1)} KB</div>
+                <div style={{ color: '#e2e8f0', fontSize: 15, fontWeight: 600 }}>{f.file.name}</div>
+                <div style={{ color: '#64748b', fontSize: 13 }}>{f.columns.length} columnas · {(f.file.size / 1024).toFixed(1)} KB</div>
               </div>
               <button
                 onClick={() => onRemove(i)}
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 16, padding: 4 }}
+                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 18, padding: 4 }}
               >✕</button>
             </div>
           ))}
@@ -138,7 +138,7 @@ function StepMapColumns({ files, configs, onChangeConfig }) {
 
   return (
     <div>
-      <p style={{ color: '#94a3b8', fontSize: 13, marginBottom: 14 }}>
+      <p style={{ color: '#94a3b8', fontSize: 15, marginBottom: 14 }}>
         Para cada archivo, elige qué tipo de datos contiene y opcionalmente mapea sus columnas a los nombres que el sistema espera.
       </p>
 
@@ -148,7 +148,7 @@ function StepMapColumns({ files, configs, onChangeConfig }) {
           const hasType = !!configs[i]?.sheet_type
           return (
             <button key={i} onClick={() => setActiveIdx(i)} style={{
-              padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              padding: '6px 12px', borderRadius: 20, fontSize: 14, fontWeight: 600, cursor: 'pointer',
               background: activeIdx === i ? '#2563eb' : '#1e293b',
               color: activeIdx === i ? 'white' : '#94a3b8',
               border: activeIdx === i ? 'none' : '1px solid #334155',
@@ -165,7 +165,7 @@ function StepMapColumns({ files, configs, onChangeConfig }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Selector de tipo */}
           <div>
-            <div style={{ color: '#64748b', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+            <div style={{ color: '#64748b', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
               ¿Qué tipo de datos tiene este archivo?
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -176,10 +176,10 @@ function StepMapColumns({ files, configs, onChangeConfig }) {
                   border: config.sheet_type === st.key ? '1.5px solid #3b82f6' : '1.5px solid #1e293b',
                   borderRadius: 8, padding: '8px 12px', cursor: 'pointer', textAlign: 'left',
                 }}>
-                  <span style={{ fontSize: 18, flexShrink: 0 }}>{st.icon}</span>
+                  <span style={{ fontSize: 20, flexShrink: 0 }}>{st.icon}</span>
                   <div>
-                    <div style={{ color: config.sheet_type === st.key ? '#93c5fd' : '#e2e8f0', fontSize: 12, fontWeight: 600 }}>{st.label}</div>
-                    <div style={{ color: '#64748b', fontSize: 11 }}>{st.desc}</div>
+                    <div style={{ color: config.sheet_type === st.key ? '#93c5fd' : '#e2e8f0', fontSize: 14, fontWeight: 600 }}>{st.label}</div>
+                    <div style={{ color: '#64748b', fontSize: 13 }}>{st.desc}</div>
                   </div>
                 </button>
               ))}
@@ -189,11 +189,11 @@ function StepMapColumns({ files, configs, onChangeConfig }) {
           {/* Mapeo de columnas */}
           {config.sheet_type && (
             <div>
-              <div style={{ color: '#64748b', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+              <div style={{ color: '#64748b', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
                 Mapear columnas (opcional — solo si los nombres son distintos)
               </div>
               <div style={{ background: '#0f172a', borderRadius: 8, border: '1px solid #1e293b', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                   <thead>
                     <tr style={{ background: '#0f172a' }}>
                       <th style={{ padding: '8px 14px', textAlign: 'left', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>
@@ -214,7 +214,7 @@ function StepMapColumns({ files, configs, onChangeConfig }) {
                             onChange={e => setColMap(col, e.target.value)}
                             style={{
                               background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155',
-                              borderRadius: 6, padding: '4px 8px', fontSize: 12, width: '100%',
+                              borderRadius: 6, padding: '4px 8px', fontSize: 14, width: '100%',
                               cursor: 'pointer',
                             }}
                           >
@@ -233,9 +233,9 @@ function StepMapColumns({ files, configs, onChangeConfig }) {
               {/* Muestra de datos */}
               {current.sample.length > 0 && (
                 <div style={{ marginTop: 10 }}>
-                  <div style={{ color: '#64748b', fontSize: 11, marginBottom: 6 }}>Vista previa:</div>
+                  <div style={{ color: '#64748b', fontSize: 13, marginBottom: 6 }}>Vista previa:</div>
                   <div style={{ overflowX: 'auto', borderRadius: 6, border: '1px solid #1e293b' }}>
-                    <table style={{ fontSize: 11, borderCollapse: 'collapse' }}>
+                    <table style={{ fontSize: 13, borderCollapse: 'collapse' }}>
                       <thead>
                         <tr>
                           {current.columns.slice(0, 5).map(c => (
@@ -273,11 +273,11 @@ function StepConfirmCsv({ files, configs }) {
 
   return (
     <div style={{ textAlign: 'center', paddingTop: 10 }}>
-      <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
-      <div style={{ fontSize: 17, fontWeight: 700, color: '#f1f5f9', marginBottom: 6 }}>
+      <div style={{ fontSize: 50, marginBottom: 12 }}>✅</div>
+      <div style={{ fontSize: 19, fontWeight: 700, color: '#f1f5f9', marginBottom: 6 }}>
         ¡Listo para procesar!
       </div>
-      <div style={{ color: '#64748b', fontSize: 13, marginBottom: 20 }}>
+      <div style={{ color: '#64748b', fontSize: 15, marginBottom: 20 }}>
         Se enviarán <strong style={{ color: '#93c5fd' }}>{configured.length} archivos CSV</strong> al sistema de conciliación
       </div>
       <div style={{ background: '#0f172a', borderRadius: 10, padding: '14px 20px', textAlign: 'left', border: '1px solid #1e293b' }}>
@@ -287,14 +287,14 @@ function StepConfirmCsv({ files, configs }) {
           const colMapped = Object.keys(cfg.col_map || {}).length
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, paddingBottom: 10, borderBottom: i < files.length - 1 ? '1px solid #1e293b' : 'none' }}>
-              <span style={{ fontSize: 20 }}>{st?.icon || '📄'}</span>
+              <span style={{ fontSize: 22 }}>{st?.icon || '📄'}</span>
               <div style={{ flex: 1 }}>
-                <div style={{ color: '#e2e8f0', fontSize: 13, fontWeight: 600 }}>{f.file.name}</div>
-                <div style={{ color: '#64748b', fontSize: 11 }}>
+                <div style={{ color: '#e2e8f0', fontSize: 15, fontWeight: 600 }}>{f.file.name}</div>
+                <div style={{ color: '#64748b', fontSize: 13 }}>
                   {st ? st.label : '⚠️ Sin tipo asignado'} · {colMapped} columnas mapeadas
                 </div>
               </div>
-              {!cfg.sheet_type && <span style={{ color: '#f59e0b', fontSize: 12 }}>Será ignorado</span>}
+              {!cfg.sheet_type && <span style={{ color: '#f59e0b', fontSize: 14 }}>Será ignorado</span>}
             </div>
           )
         })}
@@ -369,14 +369,14 @@ export default function CsvOnboarding({ onConfirm, onCancel, uploading }) {
         <div style={{ padding: '24px 28px 0', flexShrink: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
-              <h2 style={{ color: '#f1f5f9', fontSize: 18, fontWeight: 700, margin: 0 }}>
+              <h2 style={{ color: '#f1f5f9', fontSize: 20, fontWeight: 700, margin: 0 }}>
                 Importar archivos CSV
               </h2>
-              <p style={{ color: '#64748b', fontSize: 12, marginTop: 3 }}>
+              <p style={{ color: '#64748b', fontSize: 14, marginTop: 3 }}>
                 Puedes subir múltiples archivos de distintas fuentes
               </p>
             </div>
-            <button onClick={onCancel} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20, padding: 4 }}>✕</button>
+            <button onClick={onCancel} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 22, padding: 4 }}>✕</button>
           </div>
 
           {/* Step indicator */}
@@ -389,12 +389,12 @@ export default function CsvOnboarding({ onConfirm, onCancel, uploading }) {
                     background: i === step ? '#a78bfa' : i < step ? '#334155' : '#0f172a',
                     border: i < step ? '2px solid #22c55e' : i === step ? 'none' : '2px solid #334155',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 12, fontWeight: 700, color: i < step ? '#22c55e' : 'white',
+                    fontSize: 14, fontWeight: 700, color: i < step ? '#22c55e' : 'white',
                     transition: 'all 0.2s',
                   }}>
                     {i < step ? '✓' : i + 1}
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', color: i === step ? '#f1f5f9' : '#475569' }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', color: i === step ? '#f1f5f9' : '#475569' }}>
                     {label}
                   </span>
                 </div>
@@ -422,7 +422,7 @@ export default function CsvOnboarding({ onConfirm, onCancel, uploading }) {
             onClick={step === 0 ? onCancel : () => setStep(s => s - 1)}
             style={{
               padding: '9px 20px', borderRadius: 8, border: '1px solid #334155',
-              background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontWeight: 600, fontSize: 14,
+              background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontWeight: 600, fontSize: 16,
             }}
           >
             {step === 0 ? 'Cancelar' : '← Atrás'}
@@ -436,7 +436,7 @@ export default function CsvOnboarding({ onConfirm, onCancel, uploading }) {
                 padding: '9px 24px', borderRadius: 8, border: 'none',
                 background: (step === 0 ? !canNext0 : !canNext1) ? '#374151' : '#7c3aed',
                 color: 'white', cursor: (step === 0 ? !canNext0 : !canNext1) ? 'not-allowed' : 'pointer',
-                fontWeight: 700, fontSize: 14,
+                fontWeight: 700, fontSize: 16,
               }}
             >
               Siguiente →
@@ -449,7 +449,7 @@ export default function CsvOnboarding({ onConfirm, onCancel, uploading }) {
                 padding: '9px 28px', borderRadius: 8, border: 'none',
                 background: uploading ? '#374151' : '#16a34a',
                 color: 'white', cursor: uploading ? 'not-allowed' : 'pointer',
-                fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8,
+                fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8,
               }}
             >
               {uploading ? '⏳ Procesando...' : '🚀 Iniciar análisis'}

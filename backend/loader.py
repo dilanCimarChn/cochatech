@@ -74,7 +74,12 @@ def _read_sheet(xl: pd.ExcelFile, sheet_name: str) -> pd.DataFrame:
     return df
 
 
-def load_excel(file_path: str, selected_sheets: list = None) -> Dict[str, pd.DataFrame]:
+def load_excel(file_path: str, selected_sheets: list = None, col_filter: dict = None) -> Dict[str, pd.DataFrame]:
+    """
+    selected_sheets: list of sheet names the user wants to include.
+    col_filter: dict {sheet_name: [col1, col2, ...]} — columns to keep per sheet.
+                Columns are matched after normalization.
+    """
     xl     = pd.ExcelFile(file_path)
     result = {}
     for key, candidates in SHEET_MAP.items():
@@ -84,7 +89,15 @@ def load_excel(file_path: str, selected_sheets: list = None) -> Dict[str, pd.Dat
             if selected_sheets is not None and sheet_name not in selected_sheets:
                 result[key] = pd.DataFrame()
             else:
-                result[key] = _read_sheet(xl, sheet_name)
+                df = _read_sheet(xl, sheet_name)
+                # Aplicar filtro de columnas si se proporcionó
+                if col_filter and sheet_name in col_filter:
+                    keep_raw  = col_filter[sheet_name]
+                    keep_norm = [_normalize_col(c) for c in keep_raw]
+                    valid     = [c for c in keep_norm if c in df.columns]
+                    if valid:
+                        df = df[valid]
+                result[key] = df
         else:
             result[key] = pd.DataFrame()
     return result

@@ -48,8 +48,8 @@ _store: dict = {
 
 
 
-def _process_excel(file_path: str, selected_sheets: Optional[List[str]] = None):
-    sheets = loader.load_excel(file_path, selected_sheets=selected_sheets)
+def _process_excel(file_path: str, selected_sheets: Optional[List[str]] = None, col_filter: Optional[dict] = None):
+    sheets = loader.load_excel(file_path, selected_sheets=selected_sheets, col_filter=col_filter)
 
     _store["depositos"] = loader.normalize_depositos(sheets.get("depositos", pd.DataFrame()))
     _store["retiros"] = loader.normalize_retiros(sheets.get("retiros", pd.DataFrame()))
@@ -145,7 +145,7 @@ def debug_columnas():
 @app.post("/upload")
 async def upload(
     file: UploadFile = File(...),
-    sheets: Optional[str] = Form(None),  # JSON list of sheet names from onboarding
+    sheets: Optional[str] = Form(None),  # JSON: [{name, columns}] or [sheetName, ...]
 ):
     if not file.filename.endswith((".xlsx", ".xls", ".csv")):
         raise HTTPException(status_code=400, detail="Solo se aceptan archivos Excel (.xlsx, .xls) o CSV")
@@ -155,9 +155,21 @@ async def upload(
     try:
         with os.fdopen(tmp_fd, "wb") as tmp:
             tmp.write(content)
-        selected = json.loads(sheets) if sheets else None
-        _process_excel(tmp_path, selected_sheets=selected)
-        # Persist so the server can reload after restart without re-uploading
+
+        selected_sheets = None
+        col_filter      = None
+        if sheets:
+            raw = json.loads(sheets)
+            # Nuevo formato: lista de objetos {name, columns}
+            if raw and isinstance(raw[0], dict):
+                selected_sheets = [item["name"] for item in raw]
+                col_filter      = {item["name"]: item.get("columns", []) for item in raw}
+            else:
+                # Formato legado: lista de strings
+                selected_sheets = raw
+
+        _process_excel(tmp_path, selected_sheets=selected_sheets, col_filter=col_filter)
+
         os.makedirs(_DATA_DIR, exist_ok=True)
         with open(_LAST_UPLOAD, "wb") as f:
             f.write(content)
@@ -170,6 +182,7 @@ async def upload(
             os.unlink(tmp_path)
         except OSError:
             pass
+
 
     metricas = _store["metricas"]
     return {
