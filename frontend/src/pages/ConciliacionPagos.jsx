@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import TransactionTable from '../components/TransactionTable'
+import ModalReporteDiscrepancias, { ModalDetalle } from '../components/ModalReporteDiscrepancias'
 import { getConciliacionPagos } from '../api'
-
-const ESTADOS = ['', 'CONCILIADO', 'DISCREPANCIA', 'SOLO_EN_QR', 'SOLO_EN_BANCO']
 
 const ESTADO_INFO = {
   CONCILIADO:    { color: '#22c55e', label: 'Conciliado' },
@@ -11,32 +10,54 @@ const ESTADO_INFO = {
   SOLO_EN_BANCO: { color: '#3b82f6', label: 'Solo en Banco' },
 }
 
-const COLS = [
-  { key: 'nro', label: '#', nowrap: true },
-  { key: 'transaccion_id', label: 'Nro. Transacción', nowrap: true },
-  { key: 'estado', label: 'Estado' },
-  {
-    key: 'monto_qr',
-    label: 'Monto sistema (BOB)',
-    render: (val) => val != null ? Number(val).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '—',
-  },
-  {
-    key: 'monto_banco',
-    label: 'Monto banco (BOB)',
-    render: (val) => val != null ? Number(val).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '—',
-  },
-  {
-    key: 'diferencia',
-    label: 'Diferencia',
-    render: (val) => {
-      if (val === null || val === undefined) return '—'
-      const n = Number(val)
-      const color = Math.abs(n) < 0.01 ? '#22c55e' : '#ef4444'
-      return <span style={{ color, fontWeight: 600 }}>{n.toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+function buildCols(onVer) {
+  return [
+    { key: 'nro', label: '#', nowrap: true },
+    { key: 'transaccion_id', label: 'Nro. Transacción', nowrap: true },
+    { key: 'estado', label: 'Estado' },
+    {
+      key: 'monto_qr',
+      label: 'Monto sistema (BOB)',
+      render: (val) => val != null ? Number(val).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '—',
     },
-  },
-  { key: 'fecha', label: 'Fecha', nowrap: true },
-]
+    {
+      key: 'monto_banco',
+      label: 'Monto banco (BOB)',
+      render: (val) => val != null ? Number(val).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '—',
+    },
+    {
+      key: 'diferencia',
+      label: 'Diferencia',
+      render: (val) => {
+        if (val === null || val === undefined) return '—'
+        const n = Number(val)
+        const color = Math.abs(n) < 0.01 ? '#22c55e' : '#ef4444'
+        return <span style={{ color, fontWeight: 600 }}>{n.toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+      },
+    },
+    { key: 'fecha', label: 'Fecha', nowrap: true },
+    {
+      key: '_acciones',
+      label: '',
+      nowrap: true,
+      render: (_val, row) =>
+        row.estado !== 'CONCILIADO' ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onVer(row) }}
+            style={{
+              background: '#1e293b', border: '1px solid #334155',
+              color: '#94a3b8', borderRadius: 6, padding: '4px 10px',
+              fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#f59e0b'; e.currentTarget.style.color = '#f59e0b' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#334155'; e.currentTarget.style.color = '#94a3b8' }}
+          >
+            Ver detalle
+          </button>
+        ) : null,
+    },
+  ]
+}
 
 export default function ConciliacionPagos() {
   const [data, setData]       = useState([])
@@ -47,6 +68,10 @@ export default function ConciliacionPagos() {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
   const [estado, setEstado]   = useState('')
+  const [modal, setModal]     = useState(false)
+  const [detalle, setDetalle] = useState(null)
+
+  const COLS = buildCols(setDetalle)
 
   const load = (pg = 1) => {
     setLoading(true)
@@ -69,13 +94,29 @@ export default function ConciliacionPagos() {
 
   return (
     <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div>
-        <div style={{ fontSize: 11, color: '#3b82f6', fontWeight: 600, marginBottom: 4 }}>S-001</div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9' }}>Conciliación — Pagos QR</h1>
-        <p style={{ color: '#64748b', marginTop: 4, fontSize: 13 }}>
-          Pagos QR del sistema Banexcoin vs extracto bancario — {total.toLocaleString()} registros
-        </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, color: '#3b82f6', fontWeight: 600, marginBottom: 4 }}>S-001</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9' }}>Conciliación — Pagos QR</h1>
+          <p style={{ color: '#64748b', marginTop: 4, fontSize: 13 }}>
+            Pagos QR del sistema Banexcoin vs extracto bancario — {total.toLocaleString()} registros
+          </p>
+        </div>
+        <button
+          onClick={() => setModal(true)}
+          style={{
+            background: '#ef444422', border: '1px solid #ef4444',
+            color: '#ef4444', borderRadius: 8, padding: '9px 18px',
+            fontWeight: 700, fontSize: 13, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          ⚠ Reporte de Discrepancias
+        </button>
       </div>
+
+      {modal   && <ModalReporteDiscrepancias tipo="pagos" onClose={() => setModal(false)} />}
+      {detalle && <ModalDetalle row={detalle} onClose={() => setDetalle(null)} />}
 
       {/* Tarjetas resumen */}
       {resumen && (

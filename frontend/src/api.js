@@ -37,3 +37,5 @@ export const getConciliacionCobros = (params) => api.get('/conciliacion/cobros',
 export const getSaldos = (params) => api.get('/saldos', { params })
 export const getSaldosBob = (params) => api.get('/saldos/bob', { params })
 export const getExportar = () => api.get('/exportar', { responseType: 'blob' })
+export const getExportarDiscrepancias = (tipo) =>
+  api.get('/exportar/discrepancias', { params: tipo ? { tipo } : {}, responseType: 'blob' })

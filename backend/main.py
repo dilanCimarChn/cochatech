@@ -388,7 +388,7 @@ def _paginar(data: list, page: int, page_size: int) -> dict:
 def get_conciliacion_pagos(
     estado: Optional[str] = Query(None, description="CONCILIADO|DISCREPANCIA|SOLO_EN_QR|SOLO_EN_BANCO"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=500),
+    page_size: int = Query(20, ge=1, le=5000),
 ):
     if not _store["loaded"]:
         raise HTTPException(status_code=404, detail="No hay datos cargados.")
@@ -408,7 +408,7 @@ def get_conciliacion_pagos(
 def get_conciliacion_cobros(
     estado: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=500),
+    page_size: int = Query(20, ge=1, le=5000),
 ):
     if not _store["loaded"]:
         raise HTTPException(status_code=404, detail="No hay datos cargados.")
@@ -493,6 +493,85 @@ def get_saldos_bob(
         "saldo_bob": round(sum(r["saldo_bob"] for r in _store["saldos_bob"]), 2),
     }
     return paginado
+
+
+@app.get("/exportar/discrepancias")
+def exportar_discrepancias(tipo: Optional[str] = Query(None, description="pagos|cobros")):
+    if not _store["loaded"]:
+        raise HTTPException(status_code=404, detail="No hay datos cargados.")
+
+    _MOTIVO = {
+        "SOLO_EN_QR":    "Transacción registrada en el sistema Banexcoin sin registro en el extracto bancario",
+        "SOLO_EN_BANCO": "Movimiento en el extracto bancario sin transacción correspondiente en el sistema",
+    }
+
+    if tipo == "pagos":
+        fuente = _store["conciliacion_pagos"]
+    elif tipo == "cobros":
+        fuente = _store["conciliacion_cobros"]
+    else:
+        fuente = _store["conciliacion_pagos"] + _store["conciliacion_cobros"]
+
+    registros = []
+    for r in fuente:
+        if r["estado"] == "CONCILIADO":
+            continue
+        if r["estado"] == "DISCREPANCIA":
+            motivo = (
+                f"Monto diferente — Sistema: {r.get('monto_qr', '—')} BOB, "
+                f"Banco: {r.get('monto_banco', '—')} BOB, "
+                f"Diferencia: {r.get('diferencia', '—')} BOB"
+            )
+        else:
+            motivo = _MOTIVO.get(r["estado"], r["estado"])
+
+        registros.append({
+            "Tipo":                      "Pago QR" if r.get("tipo") == "pago" else "Cobro QR",
+            "Nro. Transacción":          r["transaccion_id"],
+            "Número de Cuenta":          r.get("numero_cuenta", "") or "",
+            "Nombre Cliente":            r.get("nombre", "") or "",
+            "Estado":                    r["estado"],
+            "Monto Sistema (BOB)":       r.get("monto_qr", ""),
+            "Monto Banco (BOB)":         r.get("monto_banco", ""),
+            "Diferencia (BOB)":          r.get("diferencia", ""),
+            "Fecha":                     r.get("fecha", ""),
+            "Motivo de la discrepancia": motivo,
+        })
+
+    cols = [
+        "Tipo", "Nro. Transacción", "Número de Cuenta", "Nombre Cliente",
+        "Estado", "Monto Sistema (BOB)", "Monto Banco (BOB)", "Diferencia (BOB)",
+        "Fecha", "Motivo de la discrepancia",
+    ]
+    df = pd.DataFrame(registros, columns=cols) if registros else pd.DataFrame(columns=cols)
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, sheet_name="Discrepancias", index=False)
+        wb = writer.book
+        ws = writer.sheets["Discrepancias"]
+        fmt_h   = wb.add_format({"bold": True, "bg_color": "#1e3a5f", "font_color": "white", "border": 1})
+        fmt_qr  = wb.add_format({"bg_color": "#fff3cd", "border": 1})
+        fmt_ban = wb.add_format({"bg_color": "#d1ecf1", "border": 1})
+        fmt_dis = wb.add_format({"bg_color": "#f8d7da", "border": 1})
+        ancho   = [12, 24, 18, 22, 16, 20, 18, 16, 22, 65]
+        for i, (col, w) in enumerate(zip(cols, ancho)):
+            ws.write(0, i, col, fmt_h)
+            ws.set_column(i, i, w)
+        estado_fmt = {"SOLO_EN_QR": fmt_qr, "SOLO_EN_BANCO": fmt_ban, "DISCREPANCIA": fmt_dis}
+        for row_i, row_data in df.iterrows():
+            fmt = estado_fmt.get(str(row_data.get("Estado", "")))
+            if fmt:
+                for col_i, val in enumerate(row_data):
+                    ws.write(row_i + 1, col_i, val if val != "" else None, fmt)
+
+    output.seek(0)
+    filename = f"discrepancias_{tipo or 'todas'}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @app.get("/exportar")

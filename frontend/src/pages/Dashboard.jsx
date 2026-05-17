@@ -12,7 +12,7 @@ function fmtNum(n, dec = 0) {
   return Number(n).toLocaleString('es-BO', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 }
 
-export default function Dashboard() {
+export default function Dashboard({ onUploadSuccess }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -56,7 +56,7 @@ export default function Dashboard() {
             Resumen general de la conciliación — sube el Excel de Banexcoin para comenzar
           </p>
         </div>
-        <UploadButton onSuccess={() => load()} />
+        <UploadButton onSuccess={() => { load(); onUploadSuccess?.() }} />
       </div>
 
       {/* Servicios */}
@@ -70,10 +70,29 @@ export default function Dashboard() {
       {loading && <div style={{ color: '#94a3b8' }}>Cargando métricas...</div>}
 
       {error && (
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 20, color: '#94a3b8', textAlign: 'center' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>📂</div>
-          <div style={{ fontWeight: 600, color: '#f1f5f9', marginBottom: 4 }}>Sin datos cargados</div>
-          <div style={{ fontSize: 13 }}>Usa el botón <strong style={{ color: '#3b82f6' }}>Cargar Excel</strong> para subir el archivo de Banexcoin y ver los resultados</div>
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 14, padding: 36, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+          <div style={{ width: 64, height: 64, borderRadius: 16, background: '#2563eb22', border: '1px solid #2563eb44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📂</div>
+          <div>
+            <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 17, marginBottom: 6 }}>Ningún archivo cargado</div>
+            <div style={{ fontSize: 13, color: '#64748b', maxWidth: 360 }}>
+              Sube el Excel de Banexcoin para que el motor de conciliación procese las operaciones automáticamente.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {[
+              { icon: '📊', label: 'Excel (.xlsx)', desc: 'Archivo con múltiples hojas' },
+              { icon: '📄', label: 'Archivos CSV',  desc: 'Un CSV por tipo de operación' },
+            ].map(({ icon, label, desc }) => (
+              <div key={label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: '14px 20px', textAlign: 'left', minWidth: 160 }}>
+                <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
+                <div style={{ fontWeight: 600, color: '#e2e8f0', fontSize: 13 }}>{label}</div>
+                <div style={{ color: '#475569', fontSize: 11 }}>{desc}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: '#475569' }}>
+            Usa el botón <strong style={{ color: '#3b82f6' }}>Cargar Excel</strong> en la barra lateral o en el encabezado de esta página.
+          </div>
         </div>
       )}
 

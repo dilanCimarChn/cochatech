@@ -48,8 +48,13 @@ def reconcile_pagos(pago_qr: list[dict], extracto_pagos: list[dict]) -> list[dic
     if df_banco.empty:
         return [_make(row, "pago", "SOLO_EN_QR", monto_qr=_f(row, "monto_pagado"), fecha=_s(row, "fecha_creacion")) for _, row in df_qr.iterrows()]
 
+    qr_cols = ["_tid", "monto_pagado", "fecha_creacion"]
+    for extra in ["numero_cuenta", "creado_por"]:
+        if extra in df_qr.columns:
+            qr_cols.append(extra)
+
     merged = pd.merge(
-        df_qr[["_tid", "monto_pagado", "fecha_creacion"]],
+        df_qr[qr_cols],
         df_banco[["_tid", "importe_bolivianos", "fecha"]],
         on="_tid", how="outer", indicator=True,
     )
@@ -84,6 +89,8 @@ def reconcile_pagos(pago_qr: list[dict], extracto_pagos: list[dict]) -> list[dic
             "monto_banco": abs(mb) if mb is not None else None,
             "diferencia":  diff,
             "fecha":       fecha,
+            "numero_cuenta": _s(row, "numero_cuenta"),
+            "nombre":        _s(row, "creado_por"),
         })
 
     return results
@@ -110,8 +117,13 @@ def reconcile_cobros(cobro_qr: list[dict], extracto_cobros: list[dict]) -> list[
     if df_banco.empty:
         return [_make(row, "cobro", "SOLO_EN_QR", monto_qr=_f(row, monto_col), fecha=_s(row, "fecha_creacion")) for _, row in df_qr.iterrows()]
 
+    qr_cols = ["_tid", monto_col, "fecha_creacion"]
+    for extra in ["numero_cuenta", "creado_por"]:
+        if extra in df_qr.columns:
+            qr_cols.append(extra)
+
     merged = pd.merge(
-        df_qr[["_tid", monto_col, "fecha_creacion"]],
+        df_qr[qr_cols],
         df_banco[["_tid", "importe_bolivianos", "fecha"]],
         on="_tid", how="outer", indicator=True,
     )
@@ -146,6 +158,8 @@ def reconcile_cobros(cobro_qr: list[dict], extracto_cobros: list[dict]) -> list[
             "monto_banco": abs(mb) if mb is not None else None,
             "diferencia":  diff,
             "fecha":       fecha,
+            "numero_cuenta": _s(row, "numero_cuenta"),
+            "nombre":        _s(row, "creado_por"),
         })
 
     return results
@@ -348,4 +362,6 @@ def _make(row, tipo: str, estado: str, monto_qr=None, monto_banco=None, fecha=""
         "monto_banco": monto_banco,
         "diferencia":  None,
         "fecha":       fecha or _s(row, "fecha"),
+        "numero_cuenta": _s(row, "numero_cuenta"),
+        "nombre":        _s(row, "creado_por"),
     }

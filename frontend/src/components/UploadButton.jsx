@@ -3,7 +3,7 @@ import { previewExcel, uploadExcelSheets, uploadCsv } from '../api'
 import ExcelOnboarding from './ExcelOnboarding'
 import CsvOnboarding from './CsvOnboarding'
 
-export default function UploadButton({ onSuccess }) {
+export default function UploadButton({ onSuccess, compact = false }) {
   const [loading, setLoading]       = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [error, setError]           = useState(null)
@@ -96,15 +96,15 @@ export default function UploadButton({ onSuccess }) {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const isWorking = loading || previewing
-  const btnLabel  = previewing ? 'Leyendo...' : loading ? 'Procesando...' : 'Cargar Datos'
+  const btnLabel  = previewing ? 'Leyendo...' : loading ? 'Procesando...' : compact ? 'Cargar Excel' : 'Cargar Datos'
   const btnIcon   = previewing ? '🔍' : loading ? '⏳' : '📂'
 
   return (
     <>
-      <div ref={menuRef} style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', gap: 6 }}>
+      <div ref={menuRef} style={{ position: 'relative', display: compact ? 'flex' : 'inline-flex', flexDirection: 'column', gap: 6 }}>
 
         {/* ── Botón principal con chevron ── */}
-        <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', boxShadow: isWorking ? 'none' : '0 4px 14px rgba(37,99,235,0.35)' }}>
+        <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', boxShadow: isWorking ? 'none' : '0 4px 14px rgba(37,99,235,0.35)', width: compact ? '100%' : undefined }}>
           {/* Parte izquierda: acción del último modo (Excel por defecto) */}
           <button
             id="btn-cargar-datos"
@@ -112,14 +112,14 @@ export default function UploadButton({ onSuccess }) {
             disabled={isWorking}
             style={{
               background: isWorking ? '#374151' : 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-              color: 'white', border: 'none', padding: '10px 16px',
+              color: 'white', border: 'none', padding: compact ? '8px 12px' : '10px 16px',
               cursor: isWorking ? 'not-allowed' : 'pointer',
-              fontWeight: 700, fontSize: 14,
+              fontWeight: 700, fontSize: compact ? 12 : 14, flex: compact ? 1 : undefined,
               display: 'flex', alignItems: 'center', gap: 8,
               transition: 'all 0.2s', borderRight: '1px solid rgba(255,255,255,0.15)',
             }}
           >
-            <span style={{ fontSize: 16 }}>{btnIcon}</span>
+            <span style={{ fontSize: compact ? 14 : 16 }}>{btnIcon}</span>
             {btnLabel}
           </button>
 
@@ -129,7 +129,7 @@ export default function UploadButton({ onSuccess }) {
             disabled={isWorking}
             style={{
               background: isWorking ? '#374151' : 'linear-gradient(135deg, #1d4ed8, #1e40af)',
-              color: 'white', border: 'none', padding: '10px 12px',
+              color: 'white', border: 'none', padding: compact ? '8px 10px' : '10px 12px',
               cursor: isWorking ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center',
               transition: 'all 0.2s',
